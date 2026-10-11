@@ -1,0 +1,59 @@
+[project]
+name = "neurorulegen"
+version = "0.1.0"
+description = "AI-assisted Python code analysis and deterministic rule generation"
+authors = [
+    { name = "Stepan Nazar", email = "64284448+StepanNazar@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.0",
+    "fastapi>=0.143.0",
+    "psycopg[binary,pool]>=3.3.6",
+    "pydantic-settings>=2.15.0",
+    "sqlalchemy[asyncio]>=2.1.4",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.21,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17.0",
+]
+
+[tool.ruff.lint]
+
+extend-select = [
+    "W",        # PyCodeStyle warnings
+    "I",        # Sort imports properly
+    "UP",       # Warn if certain things can changed due to newer Python versions
+    "B",        # bugbear (common bugs, bad practices)
+    "C4",       # Catch incorrect use of comprehensions, dict, list, etc
+    "SIM",      # Common simplification rules
+    "RUF",      # ruff-specific rules
+    "S",        # bandit (basic security checks)
+    "DTZ",      # enforce timezone-aware datetime
+    "PTH",      # Use pathlib instead of os.path
+    "N",   # enforce naming conventions, e.g. ClassName vs function_name
+    "BLE", # disallow catch-all exceptions
+    "PLR",    # magic number detection and more
+    "T20",  # disallows print and pprint
+]
+
+ignore = [
+    "D100", # undocumented-public-module
+    "D107",  # undocumented-public-init
+    "D203",  # incorrect-blank-lines-before-class
+    "D213", # multi-line-summary-second-line
+    "D401",  # non-imperative-mood
+    "D410",  # no-blank-line-after-section
+    "D413"  # missing-blank-line-after-last-section
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/sqlalchemy_demo.py" = ["T20"] # Allow print for CLI
+"tests/*.py" = ["S101", "PLR2004"] # Allow use of assert and magic numbers in tests
+"alembic/*.py" = ["E402"] # Allow not top-level imports in alembic scripts
