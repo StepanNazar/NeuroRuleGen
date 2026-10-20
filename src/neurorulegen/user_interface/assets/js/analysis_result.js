@@ -10,7 +10,7 @@ const narrow = matchMedia('(max-width: 767px)');
 function renderDiff() {
   container.innerHTML = html(files, {
     outputFormat: narrow.matches ? 'line-by-line' : 'side-by-side',
-    drawFileList: false,
+    drawFileList: true,
     matching: 'lines',
   });
   const wrappers = [...container.querySelectorAll('.d2h-file-wrapper')];
