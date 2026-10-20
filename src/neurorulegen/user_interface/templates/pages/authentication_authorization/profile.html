@@ -27,7 +27,9 @@
             <dt class="col-12 col-md-4 text-body-secondary">Password</dt>
             <dd class="col-12 col-md-8 text-break">{{ 'Set' if has_password else 'Not set' }}</dd>
             <dt class="col-12 col-md-4 text-body-secondary">TOTP 2FA</dt>
-            <dd class="col-12 col-md-8 text-break">{{ 'Enabled' if has_2fa else 'Disabled' }}</dd>
+            <dd id="totp-status" class="col-12 col-md-8 text-break">
+              {{ 'Enabled' if has_2fa else 'Disabled' }}
+            </dd>
           </dl>
         </div>
       </section>

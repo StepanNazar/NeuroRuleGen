@@ -1,7 +1,7 @@
 {% extends 'layouts/project.html' %}
 {% set editable = is_new_rule or is_quality_security_engineer %}
 {% block page_content %}
-  <form method="post">
+  <form method="post" data-rule-row>
     <section class="card mb-4">
       <div class="card-body">
         <h2 class="h5">Rule details</h2>
@@ -28,7 +28,7 @@
           <dd class="col-12 col-md-8 text-break">developer@example.com</dd>
           <dt class="col-12 col-md-4 text-body-secondary">Status</dt>
           <dd class="col-12 col-md-8 text-break">
-            <span class="badge text-bg-secondary">{{ rule.status }} </span>
+            <span data-rule-badge class="badge text-bg-secondary">{{ rule.status }} </span>
           </dd>
         </dl>
         {% if rule.generation_id %}
@@ -62,7 +62,7 @@
           class="btn btn-secondary"
           data-rule-status="/api/projects/{{ project.id }}/rules/{{ rule.id }}/status"
         >
-          {{ 'Approve → Disabled' if rule.status == 'Draft' else 'Enable' if rule.status == 'Disabled' else 'Disable' }}
+          {{ 'Approve' if rule.status == 'Draft' else 'Enable' if rule.status == 'Disabled' else 'Disable' }}
         </button>
       {% endif %}
     </div>

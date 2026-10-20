@@ -26,5 +26,8 @@ document.querySelectorAll('[data-confirm-url]').forEach((button) => {
 });
 document.getElementById('confirmation-submit')?.addEventListener('click', async () => {
   const result = await request(pending.dataset.confirmUrl, { method: 'DELETE' });
-  if (result) location.assign(result.redirect || location.href);
+  if (!result) return;
+  Modal.getOrCreateInstance(dialog).hide();
+  if (result.redirect) location.assign(result.redirect);
+  else pending.closest('[data-developer-row]')?.remove();
 });

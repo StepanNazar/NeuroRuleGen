@@ -56,10 +56,13 @@
         <div class="d-grid">
           {% for skill in skills %}
             <div
+              data-skill-row
               class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
             >
               <strong>{{ skill.name }} </strong>
-              <span class="badge text-bg-{{ 'success' if skill.enabled else 'secondary' }}"
+              <span
+                data-skill-badge
+                class="badge text-bg-{{ 'success' if skill.enabled else 'secondary' }}"
                 >{{ 'Enabled' if skill.enabled else 'Disabled' }}
               </span>
               <div class="d-flex flex-wrap align-items-center gap-2">

@@ -24,10 +24,13 @@
       <div class="d-grid">
         {% for rule in rules %}
           <div
+            data-rule-row
             class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
           >
             <strong>{{ rule.name }} </strong>
-            <span class="badge text-bg-{{ 'success' if rule.status == 'Enabled' else 'secondary' }}"
+            <span
+              data-rule-badge
+              class="badge text-bg-{{ 'success' if rule.status == 'Enabled' else 'secondary' }}"
               >{{ rule.status }}
             </span>
             <div class="d-flex flex-wrap align-items-center gap-2">
@@ -41,7 +44,7 @@
                   class="btn btn-sm btn-secondary"
                   data-rule-status="/api/projects/{{ project.id }}/rules/{{ rule.id }}/status"
                 >
-                  {{ 'Approve → Disabled' if rule.status == 'Draft' else 'Enable' if rule.status == 'Disabled' else 'Disable' }}
+                  {{ 'Approve' if rule.status == 'Draft' else 'Enable' if rule.status == 'Disabled' else 'Disable' }}
                 </button>
               {% endif %}
             </div>
