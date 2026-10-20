@@ -6,7 +6,7 @@
     <div class="card-body">
       <h2 class="h5">Failed sign-in attempts · all accounts</h2>
       <form class="row g-3 align-items-end mb-4" method="get">
-        <div class="col-md-5">
+        <div class="col-md-6">
           <label class="form-label" for="email">Exact email filter</label>
           <input
             class="form-control"
@@ -17,7 +17,7 @@
             placeholder="Empty = all accounts"
           />
         </div>
-        <div class="col-md-3">
+        <div class="col-md-6">
           <label class="form-label" for="minimum">Minimum failed attempts</label>
           <input
             class="form-control"
@@ -28,27 +28,28 @@
             min="0"
           />
         </div>
-        <div class="col-md-4 d-flex flex-wrap align-items-center gap-2">
+        <div class="col-12 d-flex flex-wrap align-items-center gap-2">
           <button class="btn btn-primary">Apply filters</button>
-          <a href="/admin">Reset filters</a>
+          <a class="btn btn-secondary" href="/admin">Reset filters</a>
         </div>
       </form>
       <div class="d-grid">
         {% for account in accounts %}
-          <div
-            data-account-row
-            class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
-          >
-            <div>
+          <div data-account-row class="row g-3 align-items-center border-bottom py-3 text-break">
+            <div class="col-12 col-md-6">
               <strong>{{ account.email }} </strong>
               <small>{{ account.attempts }} failed attempts</small>
             </div>
-            <span
-              data-block-badge
-              class="badge text-bg-{{ 'danger' if account.blocked else 'secondary' }}"
-              >{{ 'Blocked' if account.blocked else 'Not blocked' }}
-            </span>
-            <div class="d-flex flex-wrap align-items-center gap-2">
+            <div class="col-12 col-md-2 text-md-center">
+              <span
+                data-block-badge
+                class="badge text-bg-{{ 'danger' if account.blocked else 'secondary' }}"
+                >{{ 'Blocked' if account.blocked else 'Not blocked' }}
+              </span>
+            </div>
+            <div
+              class="col-12 col-md-4 d-flex flex-wrap justify-content-md-end align-items-center gap-2"
+            >
               <button
                 class="btn btn-sm btn-secondary"
                 data-bs-toggle="modal"
@@ -82,17 +83,21 @@
           <div
             data-account-row
             data-blocked-account
-            class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
+            class="row g-3 align-items-center border-bottom py-3 text-break"
           >
-            <strong>{{ account.email }} </strong>
-            <span data-block-badge class="badge text-bg-danger">Blocked</span>
-            <button
-              class="btn btn-sm btn-secondary"
-              data-block-url="/api/user/{{ account.id }}/block"
-              data-blocked="1"
-            >
-              Unblock
-            </button>
+            <div class="col-12 col-md-6"><strong>{{ account.email }} </strong></div>
+            <div class="col-12 col-md-2 text-md-center">
+              <span data-block-badge class="badge text-bg-danger">Blocked</span>
+            </div>
+            <div class="col-12 col-md-4 d-flex justify-content-md-end">
+              <button
+                class="btn btn-sm btn-secondary"
+                data-block-url="/api/user/{{ account.id }}/block"
+                data-blocked="1"
+              >
+                Unblock
+              </button>
+            </div>
           </div>
         {% else %}
           <p>No blocked accounts.</p>

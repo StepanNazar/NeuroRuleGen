@@ -51,21 +51,22 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
           <h2 class="h5 mb-0">Agent Skills</h2>
-          <a class="btn btn-secondary" href="/projects/{{ project.id }}/skills/new">Add skill</a>
+          <a class="btn btn-primary" href="/projects/{{ project.id }}/skills/new">Add skill</a>
         </div>
         <div class="d-grid">
           {% for skill in skills %}
-            <div
-              data-skill-row
-              class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
-            >
-              <strong>{{ skill.name }} </strong>
-              <span
-                data-skill-badge
-                class="badge text-bg-{{ 'success' if skill.enabled else 'secondary' }}"
-                >{{ 'Enabled' if skill.enabled else 'Disabled' }}
-              </span>
-              <div class="d-flex flex-wrap align-items-center gap-2">
+            <div data-skill-row class="row g-3 align-items-center border-bottom py-3 text-break">
+              <div class="col-12 col-md-6"><strong>{{ skill.name }} </strong></div>
+              <div class="col-12 col-md-2 text-md-center">
+                <span
+                  data-skill-badge
+                  class="badge text-bg-{{ 'success' if skill.enabled else 'secondary' }}"
+                  >{{ 'Enabled' if skill.enabled else 'Disabled' }}
+                </span>
+              </div>
+              <div
+                class="col-12 col-md-4 d-flex flex-wrap justify-content-md-end align-items-center gap-2"
+              >
                 <button
                   class="btn btn-sm btn-secondary"
                   data-toggle-skill="/api/projects/{{ project.id }}/skills/{{ skill.id }}"

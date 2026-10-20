@@ -43,7 +43,9 @@
         </p>
         <div class="d-flex flex-wrap align-items-center gap-2">
           <button class="btn btn-primary">Apply filters</button>
-          <a href="/projects/{{ project.id }}/usage{% if model %}?model={{ model }}{% endif %}"
+          <a
+            class="btn btn-secondary"
+            href="/projects/{{ project.id }}/usage{% if model %}?model={{ model }}{% endif %}"
             >Clear optional filters</a
           >
         </div>

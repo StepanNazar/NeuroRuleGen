@@ -23,17 +23,18 @@
       </form>
       <div class="d-grid">
         {% for rule in rules %}
-          <div
-            data-rule-row
-            class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
-          >
-            <strong>{{ rule.name }} </strong>
-            <span
-              data-rule-badge
-              class="badge text-bg-{{ 'success' if rule.status == 'Enabled' else 'secondary' }}"
-              >{{ rule.status }}
-            </span>
-            <div class="d-flex flex-wrap align-items-center gap-2">
+          <div data-rule-row class="row g-3 align-items-center border-bottom py-3 text-break">
+            <div class="col-12 col-md-6"><strong>{{ rule.name }} </strong></div>
+            <div class="col-12 col-md-2 text-md-center">
+              <span
+                data-rule-badge
+                class="badge text-bg-{{ 'success' if rule.status == 'Enabled' else 'secondary' }}"
+                >{{ rule.status }}
+              </span>
+            </div>
+            <div
+              class="col-12 col-md-4 d-flex flex-wrap justify-content-md-end align-items-center gap-2"
+            >
               <a
                 class="btn btn-sm btn-secondary"
                 href="/projects/{{ project.id }}/rules/{{ rule.id }}"

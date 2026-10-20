@@ -5,20 +5,22 @@
       <h2 class="h5">{{ list.title }}</h2>
       <div class="d-grid">
         {% for run in list.rows %}
-          <div
-            class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
-          >
-            <strong>{{ run.title }} </strong>
-            <span
-              class="badge text-bg-{{ 'success' if run.status == 'Completed' else 'danger' if run.status == 'Failed' else 'warning' }}"
-              data-run-kind="{{ list.kind }}"
-              data-run-id="{{ run.id }}"
-              >{{ run.status }}
-            </span>
-            <div class="d-flex flex-wrap align-items-center gap-2">
+          <div class="row g-3 align-items-center border-bottom py-3 text-break">
+            <div class="col-12 col-md-6"><strong>{{ run.title }} </strong></div>
+            <div class="col-12 col-md-2 text-md-center">
+              <span
+                class="badge text-bg-{{ 'success' if run.status == 'Completed' else 'danger' if run.status == 'Failed' else 'warning' }}"
+                data-run-kind="{{ list.kind }}"
+                data-run-id="{{ run.id }}"
+                >{{ run.status }}
+              </span>
+            </div>
+            <div
+              class="col-12 col-md-4 d-flex flex-wrap justify-content-md-end align-items-center gap-2"
+            >
               {% if list.kind == 'ai' %}
                 <a
-                  class="btn btn-sm btn-secondary"
+                  class="btn btn-sm btn-primary"
                   href="/projects/{{ project.id }}/analyses/{{ run.id }}"
                   >Result</a
                 >
@@ -29,7 +31,7 @@
                 >
               {% elif list.kind == 'rule' %}
                 <a
-                  class="btn btn-sm btn-secondary"
+                  class="btn btn-sm btn-primary"
                   href="/projects/{{ project.id }}/rule-analyses/{{ run.id }}"
                   >Output</a
                 >

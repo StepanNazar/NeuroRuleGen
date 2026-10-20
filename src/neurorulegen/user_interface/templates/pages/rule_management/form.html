@@ -32,7 +32,9 @@
           </dd>
         </dl>
         {% if rule.generation_id %}
-          <a href="/projects/{{ project.id }}/generations/{{ rule.generation_id }}/log"
+          <a
+            class="btn btn-secondary"
+            href="/projects/{{ project.id }}/generations/{{ rule.generation_id }}/log"
             >Open generation log</a
           >
         {% endif %}
@@ -53,7 +55,7 @@
       {% if editable %}
         <button class="btn btn-primary">Save rule</button>
       {% endif %}
-      <a href="/projects/{{ project.id }}/rules"
+      <a class="btn btn-secondary" href="/projects/{{ project.id }}/rules"
         >{{ 'Cancel' if editable else 'Back to rules' }}
       </a>
       {% if not is_new_rule and is_quality_security_engineer %}

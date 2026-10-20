@@ -16,7 +16,7 @@
 {{ skill.text }}</textarea>
         <div class="d-flex flex-wrap align-items-center gap-2">
           <button class="btn btn-primary">{{ 'Save changes' if skill.id else 'Add skill' }}</button>
-          <a href="/projects/{{ project.id }}/ai">Cancel</a>
+          <a class="btn btn-secondary" href="/projects/{{ project.id }}/ai">Cancel</a>
         </div>
       </form>
     </div>

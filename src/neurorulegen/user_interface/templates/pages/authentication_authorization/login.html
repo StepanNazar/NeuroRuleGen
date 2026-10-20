@@ -22,12 +22,14 @@
     <div class="border rounded bg-body-tertiary p-3 text-body-secondary mb-3">
       CAPTCHA verification
     </div>
-    <button class="btn btn-primary w-100">Sign in</button>
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary">Sign in</button>
+      <a class="btn btn-secondary" href="/github/connect">Sign in with GitHub</a>
+    </div>
   </form>
-  <a class="btn btn-secondary w-100 mt-3" href="/github/connect">Sign in with GitHub</a>
   <hr />
-  <div class="d-flex justify-content-between">
-    <a href="/register">Register</a>
-    <a href="/password-recovery">Forgot password?</a>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-secondary" href="/register">Register</a>
+    <a class="btn btn-secondary" href="/password-recovery">Forgot password?</a>
   </div>
 {% endblock %}
