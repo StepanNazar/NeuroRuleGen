@@ -1,0 +1,21 @@
+{
+  "name": "neurorulegen-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "format": "prettier --write 'src/neurorulegen/user_interface/templates/**/*.html' 'src/neurorulegen/user_interface/assets/**/*.{js,css}' vite.config.js package.json .prettierrc.json",
+    "format:check": "prettier --check 'src/neurorulegen/user_interface/templates/**/*.html' 'src/neurorulegen/user_interface/assets/**/*.{js,css}' vite.config.js package.json .prettierrc.json"
+  },
+  "dependencies": {
+    "bootstrap": "5.3.8",
+    "bootswatch": "5.3.8",
+    "diff2html": "3.4.56"
+  },
+  "devDependencies": {
+    "vite": "8.3.4",
+    "prettier": "3.9.10",
+    "prettier-plugin-jinja-template": "^2.1.0"
+  }
+}

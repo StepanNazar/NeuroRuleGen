@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div
+    class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4"
+  >
+    <div>
+      <h1>{{ title }}</h1>
+    </div>
+    {% block heading_actions %}
+    {% endblock %}
+  </div>
+  {% block page_content %}
+  {% endblock %}
+{% endblock %}

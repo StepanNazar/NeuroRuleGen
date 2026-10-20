@@ -1,0 +1,7 @@
+<a class="nav-link" href="/projects/{{ project.id }}">Overview</a>
+<a class="nav-link" href="/projects/{{ project.id }}/rules">Rules</a>
+{% if is_quality_security_engineer %}
+  <a class="nav-link" href="/projects/{{ project.id }}/settings">Settings</a>
+  <a class="nav-link" href="/projects/{{ project.id }}/ai">AI settings</a>
+  <a class="nav-link" href="/projects/{{ project.id }}/usage">Tokens</a>
+{% endif %}

@@ -1,0 +1,138 @@
+{% extends 'layouts/application.html' %}
+{% from 'components/pagination.html' import pagination %}
+{% block page_content %}
+  <p class="text-secondary">Failed sign-in attempts over the last 7 days</p>
+  <section class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5">Failed sign-in attempts · all accounts</h2>
+      <form class="row g-3 align-items-end mb-4" method="get">
+        <div class="col-md-6">
+          <label class="form-label" for="email">Exact email filter</label>
+          <input
+            class="form-control"
+            type="email"
+            name="email"
+            id="email"
+            value="{{ email }}"
+            placeholder="Empty = all accounts"
+          />
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="minimum">Minimum failed attempts</label>
+          <input
+            class="form-control"
+            type="number"
+            name="minimum"
+            id="minimum"
+            value="{{ minimum }}"
+            min="0"
+          />
+        </div>
+        <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-primary">Apply filters</button>
+          <a class="btn btn-secondary" href="/admin">Reset filters</a>
+        </div>
+      </form>
+      <div class="d-grid">
+        {% for account in accounts %}
+          <div data-account-row class="row g-3 align-items-center border-bottom py-3 text-break">
+            <div class="col-12 col-md-6">
+              <strong>{{ account.email }} </strong>
+              <small>{{ account.attempts }} failed attempts</small>
+            </div>
+            <div class="col-12 col-md-2 text-md-center">
+              <span
+                data-block-badge
+                class="badge text-bg-{{ 'danger' if account.blocked else 'secondary' }}"
+                >{{ 'Blocked' if account.blocked else 'Not blocked' }}
+              </span>
+            </div>
+            <div
+              class="col-12 col-md-4 d-flex flex-wrap justify-content-md-end align-items-center gap-2"
+            >
+              <button
+                class="btn btn-sm btn-secondary"
+                data-bs-toggle="modal"
+                data-bs-target="#attempt-details"
+                data-email="{{ account.email }}"
+                data-count="{{ account.attempts }}"
+              >
+                Details
+              </button>
+              <button
+                class="btn btn-sm btn-secondary"
+                data-block-url="/api/user/{{ account.id }}/block"
+                data-blocked="{{ '1' if account.blocked else '0' }}"
+              >
+                {{ 'Unblock' if account.blocked else 'Block' }}
+              </button>
+            </div>
+          </div>
+        {% else %}
+          <p>No accounts match these filters.</p>
+        {% endfor %}
+      </div>
+      {{ pagination(pager) }}
+    </div>
+  </section>
+  <section class="card">
+    <div class="card-body">
+      <h2 class="h5">Currently blocked accounts</h2>
+      <div class="d-grid">
+        {% for account in blocked %}
+          <div
+            data-account-row
+            data-blocked-account
+            class="row g-3 align-items-center border-bottom py-3 text-break"
+          >
+            <div class="col-12 col-md-6"><strong>{{ account.email }} </strong></div>
+            <div class="col-12 col-md-2 text-md-center">
+              <span data-block-badge class="badge text-bg-danger">Blocked</span>
+            </div>
+            <div class="col-12 col-md-4 d-flex justify-content-md-end">
+              <button
+                class="btn btn-sm btn-secondary"
+                data-block-url="/api/user/{{ account.id }}/block"
+                data-blocked="1"
+              >
+                Unblock
+              </button>
+            </div>
+          </div>
+        {% else %}
+          <p>No blocked accounts.</p>
+        {% endfor %}
+      </div>
+      {{ pagination(blocked_pager) }}
+    </div>
+  </section>
+  <div
+    class="modal fade"
+    id="attempt-details"
+    tabindex="-1"
+    aria-labelledby="attempt-title"
+    aria-hidden="true"
+  >
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title fs-5" id="attempt-title">Failed sign-in details</h2>
+          <button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p id="attempt-summary"></p>
+          <pre class="p-3 border rounded bg-body-tertiary text-break overflow-auto">
+2026-10-19 10:42 · 203.0.113.4
+Mozilla/5.0 Firefox/132.0
+
+2026-10-19 10:45 · 203.0.113.8
+curl/8.10.0</pre>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/admin.js') }}{% endblock %}

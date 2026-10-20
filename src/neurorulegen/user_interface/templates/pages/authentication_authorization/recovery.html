@@ -1,0 +1,32 @@
+{% extends 'layouts/auth.html' %}
+{% from 'components/password_fields.html' import password_fields %}
+{% block auth_content %}
+  <form method="post" id="recovery-form">
+    <label class="form-label" for="email">Email</label>
+    <input
+      class="form-control mb-3"
+      id="email"
+      name="email"
+      type="email"
+      autocomplete="email"
+      required
+    />
+    <button class="btn btn-secondary" type="button" id="request-code">Get confirmation code</button>
+    <hr />
+    <label class="form-label" for="code">Email confirmation code</label>
+    <input
+      class="form-control mb-3"
+      id="code"
+      name="code"
+      inputmode="numeric"
+      autocomplete="one-time-code"
+      pattern="[0-9]{6}"
+      required
+    />{{ password_fields('New password') }}
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <button class="btn btn-primary">Save password</button>
+      <a class="btn btn-secondary" href="/login">Back to sign in</a>
+    </div>
+  </form>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/password_recovery.js') }}{% endblock %}

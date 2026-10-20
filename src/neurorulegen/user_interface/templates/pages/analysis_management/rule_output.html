@@ -1,0 +1,15 @@
+{% extends 'layouts/project.html' %}
+{% block heading_actions %}
+  <a class="btn btn-secondary" href="/projects/{{ project.id }}">Back to project</a>
+{% endblock %}
+{% block page_content %}
+  <p>
+    <span
+      class="badge text-bg-{{ 'success' if run.status == 'Completed' else 'danger' if run.status == 'Failed' else 'warning' }}"
+      >{{ run.status|default('Completed') }}
+    </span>
+  </p>
+  <label class="form-label" for="rule-output">Rule output</label
+  ><textarea class="form-control font-monospace small" id="rule-output" rows="18" readonly>
+{{ output }}</textarea>
+{% endblock %}

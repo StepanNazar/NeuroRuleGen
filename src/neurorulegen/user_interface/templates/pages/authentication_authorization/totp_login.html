@@ -1,0 +1,21 @@
+{% extends 'layouts/auth.html' %}
+{% block auth_content %}
+  <p>Enter the code from your authenticator app.</p>
+  <form method="post">
+    <label class="form-label" for="code">One-time code</label>
+    <input
+      class="form-control mb-4"
+      id="code"
+      name="code"
+      inputmode="numeric"
+      autocomplete="one-time-code"
+      pattern="[0-9]{6}"
+      maxlength="6"
+      required
+    />
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <button class="btn btn-primary">Continue</button>
+      <a class="btn btn-secondary" href="/login">Back to sign in</a>
+    </div>
+  </form>
+{% endblock %}

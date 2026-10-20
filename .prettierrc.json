@@ -1,0 +1,13 @@
+{
+  "plugins": ["prettier-plugin-jinja-template"],
+  "singleQuote": true,
+  "printWidth": 100,
+  "overrides": [
+    {
+      "files": ["src/neurorulegen/user_interface/templates/**/*.html"],
+      "options": {
+        "parser": "jinja-template"
+      }
+    }
+  ]
+}

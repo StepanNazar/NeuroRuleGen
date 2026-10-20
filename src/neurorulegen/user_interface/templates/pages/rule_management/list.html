@@ -1,0 +1,61 @@
+{% extends 'layouts/project.html' %}
+{% from 'components/pagination.html' import pagination %}
+{% block heading_actions %}
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <a class="btn btn-primary" href="/projects/{{ project.id }}/rules/new">Add rule</a>
+    <a class="btn btn-secondary" href="/projects/{{ project.id }}/generations/new">Generate rule</a>
+  </div>
+{% endblock %}
+{% block page_content %}
+  <section class="card">
+    <div class="card-body">
+      <form method="get" class="d-flex align-items-end gap-3 mb-4 flex-wrap">
+        <div>
+          <label class="form-label" for="status">Status filter</label>
+          <select class="form-select" name="status" id="status">
+            <option value="">All</option>
+            {% for value in ['Draft','Disabled','Enabled'] %}
+              <option {{ 'selected' if status == value }}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button class="btn btn-primary">Apply filter</button>
+      </form>
+      <div class="d-grid">
+        {% for rule in rules %}
+          <div data-rule-row class="row g-3 align-items-center border-bottom py-3 text-break">
+            <div class="col-12 col-md-6"><strong>{{ rule.name }} </strong></div>
+            <div class="col-12 col-md-2 text-md-center">
+              <span
+                data-rule-badge
+                class="badge text-bg-{{ 'success' if rule.status == 'Enabled' else 'secondary' }}"
+                >{{ rule.status }}
+              </span>
+            </div>
+            <div
+              class="col-12 col-md-4 d-flex flex-wrap justify-content-md-end align-items-center gap-2"
+            >
+              <a
+                class="btn btn-sm btn-secondary"
+                href="/projects/{{ project.id }}/rules/{{ rule.id }}"
+                >View</a
+              >
+              {% if is_quality_security_engineer %}
+                <button
+                  class="btn btn-sm btn-secondary"
+                  data-rule-status="/api/projects/{{ project.id }}/rules/{{ rule.id }}/status"
+                >
+                  {{ 'Approve' if rule.status == 'Draft' else 'Enable' if rule.status == 'Disabled' else 'Disable' }}
+                </button>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <p>No rules match this status. Change the filter or add a rule.</p>
+        {% endfor %}
+      </div>
+      {{ pagination(pager) }}
+    </div>
+  </section>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/rules.js') }}{% endblock %}

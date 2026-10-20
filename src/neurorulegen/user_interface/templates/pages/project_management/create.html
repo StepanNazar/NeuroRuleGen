@@ -1,0 +1,26 @@
+{% extends 'layouts/application.html' %}
+{% block page_content %}
+  <section class="card col-12 col-lg-8">
+    <div class="card-body">
+      <h2 class="h5">Project details</h2>
+      <form method="post">
+        <label class="form-label" for="name">Project name</label>
+        <input class="form-control mb-3" id="name" name="name" required maxlength="120" />
+        <label class="form-label" for="repository">GitHub repository URL</label>
+        <input
+          class="form-control mb-4"
+          id="repository"
+          name="repository"
+          type="url"
+          pattern="https://github\.com/[^/]+/[^/]+/?"
+          placeholder="https://github.com/team/python-api"
+          required
+        />
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-primary">Create project</button>
+          <a class="btn btn-secondary" href="/projects">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endblock %}

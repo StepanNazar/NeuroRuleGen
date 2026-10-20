@@ -402,3 +402,5 @@ cython_debug/
 !scripts/
 !scripts/**
 !.env.example
+node_modules/
+src/neurorulegen/user_interface/static/dist/

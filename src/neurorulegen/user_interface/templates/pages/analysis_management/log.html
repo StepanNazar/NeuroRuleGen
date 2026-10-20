@@ -1,0 +1,63 @@
+{% extends 'layouts/project.html' %}
+{% block heading_actions %}
+  <a
+    class="btn btn-primary"
+    href="/projects/{{ project.id }}/{{ 'rules/' ~ (run.rule_id|default(1)) if generation else 'analyses/' ~ run_id }}"
+    >{{ 'Open created Draft' if generation else 'Open result' }}
+  </a>
+{% endblock %}
+{% block page_content %}
+  <section class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5">Run parameters and token usage</h2>
+      <dl class="row g-2">
+        <dt class="col-12 col-md-4 text-body-secondary">Status</dt>
+        <dd class="col-12 col-md-8 text-break">{{ run.status|default('Completed') }}</dd>
+        <dt class="col-12 col-md-4 text-body-secondary">Provider / model</dt>
+        <dd class="col-12 col-md-8 text-break">
+          {{ run.provider|default('OpenAI') }} / {{ run.model|default('gpt-5') }}
+        </dd>
+        <dt class="col-12 col-md-4 text-body-secondary">Author</dt>
+        <dd class="col-12 col-md-8 text-break">developer@example.com</dd>
+        <dt class="col-12 col-md-4 text-body-secondary">Input / output / total tokens</dt>
+        <dd class="col-12 col-md-8 text-break">4,200 / 1,800 / 6,000</dd>
+        {% if generation %}
+          <dt class="col-12 col-md-4 text-body-secondary">Mode / iteration limit</dt>
+          <dd class="col-12 col-md-8 text-break">
+            {{ run.mode|default('Iterative') }}{% if run.mode != 'Simple' and run.iterations %}
+              / {{ run.iterations }}
+            {% endif %}
+          </dd>
+        {% else %}
+          <dt class="col-12 col-md-4 text-body-secondary">Base / head commit SHA</dt>
+          <dd class="col-12 col-md-8 text-break">
+            <code>7ac1a12 / b2f8c91</code>
+          </dd>
+          <dt class="col-12 col-md-4 text-body-secondary">MCP / Agent Skills snapshot</dt>
+          <dd class="col-12 col-md-8 text-break">repository-files, python-quality</dd>
+        {% endif %}
+      </dl>
+      <label class="form-label"
+        >{{ 'Initial instruction' if generation else 'System prompt snapshot / additional instruction' }}
+      </label>
+      <pre class="p-3 border rounded bg-body-tertiary text-break overflow-auto mb-0">
+{{ instruction }}</pre>
+    </div>
+  </section>
+  {% if original %}
+    <p class="alert alert-info">
+      Branched from
+      <a
+        href="/projects/{{ project.id }}/{{ 'generations' if generation else 'analyses' }}/{{ original }}/log{% if original_event %}#event-{{ original_event }}{% endif %}"
+        >original run #{{ original }} </a
+      >.
+    </p>
+    {% if not generation %}
+      <p class="alert alert-warning">
+        MCP / Skills have changed; continuing may produce different results or fail.
+      </p>
+    {% endif %}
+  {% endif %}
+  {% include 'components/run_timeline.html' %}
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/run_log.js') }}{% endblock %}

@@ -1,0 +1,42 @@
+{% extends 'layouts/project.html' %}
+{% block page_content %}
+  <section class="card col-12 col-lg-8">
+    <div class="card-body">
+      <h2 class="h5">Analysis parameters</h2>
+      <form method="post">
+        <label class="form-label" for="pr">Pull request number</label>
+        <input
+          class="form-control mb-3"
+          type="number"
+          id="pr"
+          name="pr"
+          min="1"
+          value="{{ pr or '' }}"
+          required
+        />
+        <label class="form-label" for="provider">Provider</label>
+        <select class="form-select mb-3" name="provider" id="provider">
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+        </select>
+        <label class="form-label" for="model">Model</label>
+        <select class="form-select mb-3" name="model" id="model">
+          <option value="gpt-5">gpt-5</option>
+        </select>
+        <label class="form-label" for="instruction">Additional instruction</label
+        ><textarea
+          class="form-control mb-4"
+          id="instruction"
+          name="instruction"
+          rows="4"
+          placeholder="Optional instructions for this analysis"
+        ></textarea>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-primary">Start analysis</button>
+          <a class="btn btn-secondary" href="/projects/{{ project.id }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/forms.js') }}{% endblock %}
