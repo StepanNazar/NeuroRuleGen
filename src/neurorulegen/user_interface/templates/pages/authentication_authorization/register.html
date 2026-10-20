@@ -1,0 +1,26 @@
+{% extends 'layouts/auth.html' %}
+{% from 'components/password_fields.html' import password_fields %}
+{% block auth_content %}
+  <form method="post">
+    <label class="form-label" for="name">Display name</label>
+    <input class="form-control mb-3" id="name" name="name" autocomplete="name" required />
+    <label class="form-label" for="email">Email</label>
+    <input
+      class="form-control mb-3"
+      id="email"
+      name="email"
+      type="email"
+      autocomplete="email"
+      required
+    />{{ password_fields() }}
+    <div class="border rounded bg-body-tertiary p-3 text-body-secondary mb-3">
+      CAPTCHA verification
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <button class="btn btn-primary">Create account</button>
+      <a class="btn btn-secondary" href="/github/connect">With GitHub</a>
+    </div>
+  </form>
+  <a class="d-block mt-3" href="/login">Back to sign in</a>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/forms.js') }}{% endblock %}

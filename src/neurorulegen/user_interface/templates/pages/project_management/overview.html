@@ -1,0 +1,36 @@
+{% extends 'layouts/project.html' %}
+{% from 'components/run_list.html' import run_list %}
+{% block heading_actions %}
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <a class="btn btn-primary" href="/projects/{{ project.id }}/analyses/new">New AI analysis</a>
+    <form method="post" action="/projects/{{ project.id }}/rule-analyses">
+      <button class="btn btn-secondary">Run rule-based analysis</button>
+    </form>
+  </div>
+{% endblock %}
+{% block page_content %}
+  <p class="text-body-secondary text-break">
+    {{ project.repository|replace('https://github.com/', '') }}
+  </p>
+  <div class="d-flex justify-content-end mb-3">
+    <button
+      class="btn btn-sm btn-secondary"
+      id="refresh-runs"
+      data-url="/api/projects/{{ project.id }}/runs"
+    >
+      Refresh statuses
+    </button>
+  </div>
+  {% for list in lists %}{{ run_list(list, project) }}{% endfor %}
+  {% if can_leave_project %}
+    <button
+      class="btn btn-danger"
+      data-confirm-url="/api/projects/{{ project.id }}/membership"
+      data-confirm-message="You will lose access to {{ project.name }}."
+      data-confirm-title="Leave this project?"
+    >
+      Leave project
+    </button>
+  {% endif %}
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/project_overview.js') }}{% endblock %}

@@ -1,0 +1,7 @@
+node_modules/
+.venv/
+.scratch/
+gitignored_docs/
+src/neurorulegen/user_interface/static/dist/
+package-lock.json
+uv.lock

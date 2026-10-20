@@ -1,0 +1,50 @@
+{% from 'components/pagination.html' import pagination %}
+{% macro run_list(list, project) %}
+  <section class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5">{{ list.title }}</h2>
+      <div class="d-grid">
+        {% for run in list.rows %}
+          <div
+            class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
+          >
+            <strong>{{ run.title }} </strong>
+            <span
+              class="badge text-bg-{{ 'success' if run.status == 'Completed' else 'danger' if run.status == 'Failed' else 'warning' }}"
+              data-run-kind="{{ list.kind }}"
+              data-run-id="{{ run.id }}"
+              >{{ run.status }}
+            </span>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              {% if list.kind == 'ai' %}
+                <a
+                  class="btn btn-sm btn-secondary"
+                  href="/projects/{{ project.id }}/analyses/{{ run.id }}"
+                  >Result</a
+                >
+                <a
+                  class="btn btn-sm btn-secondary"
+                  href="/projects/{{ project.id }}/analyses/{{ run.id }}/log"
+                  >Log</a
+                >
+              {% elif list.kind == 'rule' %}
+                <a
+                  class="btn btn-sm btn-secondary"
+                  href="/projects/{{ project.id }}/rule-analyses/{{ run.id }}"
+                  >Output</a
+                >
+              {% else %}
+                <a
+                  class="btn btn-sm btn-secondary"
+                  href="/projects/{{ project.id }}/generations/{{ run.id }}/log"
+                  >Generation log</a
+                >
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      {{ pagination(list.pager) }}
+    </div>
+  </section>
+{% endmacro %}

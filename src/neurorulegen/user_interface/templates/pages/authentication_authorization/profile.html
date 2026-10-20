@@ -1,0 +1,88 @@
+{% extends 'layouts/application.html' %}
+{% from 'components/password_fields.html' import password_fields %}
+{% block page_content %}
+  <p class="text-secondary">{{ profile.email }}</p>
+  {% if not is_activated %}
+    <div class="alert alert-warning">
+      Your account is not activated. Activate it to access projects.
+      <button class="btn btn-sm btn-secondary ms-2" type="button" id="resend-activation">
+        Resend activation email
+      </button>
+    </div>
+  {% endif %}
+  <div class="row g-4">
+    <div class="col-lg-5">
+      <section class="card">
+        <div class="card-body">
+          <h2 class="h5">Account details</h2>
+          <dl class="row g-2">
+            <dt class="col-12 col-md-4 text-body-secondary">Activation</dt>
+            <dd class="col-12 col-md-8 text-break">
+              {{ 'Activated' if is_activated else 'Awaiting activation' }}
+            </dd>
+            <dt class="col-12 col-md-4 text-body-secondary">GitHub</dt>
+            <dd class="col-12 col-md-8 text-break">
+              {{ 'Connected: github-user' if has_github else 'Not connected' }}
+            </dd>
+            <dt class="col-12 col-md-4 text-body-secondary">Password</dt>
+            <dd class="col-12 col-md-8 text-break">{{ 'Set' if has_password else 'Not set' }}</dd>
+            <dt class="col-12 col-md-4 text-body-secondary">TOTP 2FA</dt>
+            <dd class="col-12 col-md-8 text-break">{{ 'Enabled' if has_2fa else 'Disabled' }}</dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+    <div class="col-lg-7">
+      <section class="card">
+        <div class="card-body">
+          <h2 class="h5">Edit profile</h2>
+          <form method="post">
+            <label class="form-label" for="name">Display name</label>
+            <input
+              class="form-control mb-3"
+              id="name"
+              name="name"
+              value="{{ profile.name }}"
+              required
+            />
+            <button class="btn btn-primary">Save name</button>
+          </form>
+          {% if not has_github %}
+            <a class="btn btn-secondary mt-3" href="/github/connect">Connect GitHub</a>
+          {% endif %}
+          <hr />
+          <h3 class="h6">{{ 'Change password' if has_password else 'Set password' }}</h3>
+          <form method="post">
+            {% if has_password %}
+              <label class="form-label" for="current-password">Current password</label>
+              <input
+                class="form-control mb-3"
+                id="current-password"
+                name="current_password"
+                type="password"
+                autocomplete="current-password"
+                required
+              />
+            {% endif %}{{ password_fields('New password') }}
+            <button class="btn btn-primary">
+              {{ 'Change password' if has_password else 'Set password' }}
+            </button>
+          </form>
+          <hr />
+          {% if has_2fa %}
+            <button class="btn btn-secondary" id="disable-totp">Disable 2FA</button>
+          {% else %}
+            <a class="btn btn-secondary" href="/totp/setup">Set up TOTP</a>
+          {% endif %}
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="d-flex flex-wrap align-items-center gap-2 mt-4">
+    {% if is_activated %}
+      <a class="btn btn-primary" href="/projects">Home: my projects</a>
+    {% endif %}
+    <a class="btn btn-secondary" href="/logout">Sign out</a>
+  </div>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/profile.js') }}{% endblock %}

@@ -1,0 +1,85 @@
+{% extends 'layouts/project.html' %}
+{% block page_content %}
+  <div class="d-grid gap-4">
+    <section class="card">
+      <div class="card-body">
+        <h2 class="h5">Prompt and MCP</h2>
+        <form method="post">
+          <label class="form-label" for="prompt">Additional system prompt</label
+          ><textarea class="form-control mb-3" id="prompt" name="prompt" rows="5">
+{{ configuration.prompt }}</textarea
+          ><label class="form-label" for="mcp">MCP configuration</label
+          ><textarea
+            class="form-control font-monospace small mb-3"
+            id="mcp"
+            name="mcp"
+            rows="8"
+            spellcheck="false"
+          >
+{{ configuration.mcp }}</textarea
+          ><button class="btn btn-primary">Save configuration</button>
+        </form>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-body">
+        <h2 class="h5">Provider keys</h2>
+        <form method="post">
+          <label class="form-label" for="openai-key">OpenAI API key</label>
+          <input
+            class="form-control mb-3"
+            id="openai-key"
+            name="openai_key"
+            type="password"
+            autocomplete="off"
+            placeholder="Configured · enter a new key to replace"
+          />
+          <label class="form-label" for="anthropic-key">Anthropic API key</label>
+          <input
+            class="form-control mb-3"
+            id="anthropic-key"
+            name="anthropic_key"
+            type="password"
+            autocomplete="off"
+            placeholder="Not configured · enter a key"
+          />
+          <button class="btn btn-primary">Save keys</button>
+        </form>
+      </div>
+    </section>
+    <section class="card">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+          <h2 class="h5 mb-0">Agent Skills</h2>
+          <a class="btn btn-secondary" href="/projects/{{ project.id }}/skills/new">Add skill</a>
+        </div>
+        <div class="d-grid">
+          {% for skill in skills %}
+            <div
+              class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 border-bottom py-3 text-break"
+            >
+              <strong>{{ skill.name }} </strong>
+              <span class="badge text-bg-{{ 'success' if skill.enabled else 'secondary' }}"
+                >{{ 'Enabled' if skill.enabled else 'Disabled' }}
+              </span>
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <button
+                  class="btn btn-sm btn-secondary"
+                  data-toggle-skill="/api/projects/{{ project.id }}/skills/{{ skill.id }}"
+                >
+                  {{ 'Disable' if skill.enabled else 'Enable' }}
+                </button>
+                <a
+                  class="btn btn-sm btn-secondary"
+                  href="/projects/{{ project.id }}/skills/{{ skill.id }}"
+                  >Edit</a
+                >
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+  </div>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/ai_settings.js') }}{% endblock %}

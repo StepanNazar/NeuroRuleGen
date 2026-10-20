@@ -1,0 +1,39 @@
+<header id="site-header" class="fixed-top w-100 border-bottom bg-body">
+  <nav class="navbar navbar-expand-md container-fluid bg-primary px-4" aria-label="Main navigation">
+    <a
+      class="navbar-brand"
+      href="{{ '/admin' if is_admin else '/login' if request.url.path in ['/login','/register','/password-recovery','/totp/verify'] else '/projects' }}"
+    >
+      NeuroRuleGen</a
+    >
+    <button
+      class="navbar-toggler"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#main-navigation"
+      aria-controls="main-navigation"
+      aria-expanded="false"
+      aria-label="Toggle navigation"
+    >
+      <span class="navbar-toggler-icon"> </span>
+    </button>
+    <div class="collapse navbar-collapse" id="main-navigation">
+      <div class="navbar-nav ms-auto gap-md-3">
+        {% if is_admin %}
+          <a class="nav-link" href="/logout">Sign out</a>
+        {% elif request.url.path not in ['/login','/register','/password-recovery','/totp/verify','/totp/setup','/activate'] %}
+          <a class="nav-link" href="/projects">Home: my projects</a>
+          <a class="nav-link" href="/profile">My profile</a>
+        {% else %}
+          <a class="nav-link" href="/login">Sign in</a>
+          <a class="nav-link" href="/register">Register</a>
+        {% endif %}
+        {% if project %}
+          <div class="border-top mt-2 pt-2 d-md-none">
+            {% include 'components/project_links.html' %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+</header>

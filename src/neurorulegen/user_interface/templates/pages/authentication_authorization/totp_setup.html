@@ -1,0 +1,30 @@
+{% extends 'layouts/auth.html' %}
+{% block auth_content %}
+  <p>1. Add this account to your authenticator app.</p>
+  <div
+    class="border rounded bg-body-tertiary p-5 mx-auto text-center"
+    role="img"
+    aria-label="QR code placeholder"
+  >
+    QR code
+  </div>
+  <label class="form-label" for="secret">Secret for manual entry</label>
+  <input class="form-control mb-3" id="secret" value="JBSW Y3DP EHPK 3PXP" readonly />
+  <p>2. Enter the one-time code.</p>
+  <form method="post">
+    <label class="form-label" for="code">TOTP code</label>
+    <input
+      class="form-control mb-4"
+      id="code"
+      name="code"
+      pattern="[0-9]{6}"
+      inputmode="numeric"
+      autocomplete="one-time-code"
+      required
+    />
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <button class="btn btn-primary">Confirm and enable</button>
+      <a href="/profile">Cancel</a>
+    </div>
+  </form>
+{% endblock %}

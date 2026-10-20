@@ -1,0 +1,24 @@
+{% extends 'layouts/project.html' %}
+{% block page_content %}
+  <section class="card">
+    <div class="card-body">
+      <form method="post">
+        <label class="form-label" for="name">Name</label>
+        <input class="form-control mb-3" name="name" id="name" value="{{ skill.name }}" required />
+        <label class="form-label" for="text">Skill text</label
+        ><textarea
+          class="form-control font-monospace small mb-4"
+          id="text"
+          name="text"
+          rows="18"
+          required
+        >
+{{ skill.text }}</textarea>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-primary">{{ 'Save changes' if skill.id else 'Add skill' }}</button>
+          <a href="/projects/{{ project.id }}/ai">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </section>
+{% endblock %}

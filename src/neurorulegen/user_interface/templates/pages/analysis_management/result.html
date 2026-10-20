@@ -1,0 +1,30 @@
+{% extends 'layouts/project.html' %}
+{% block heading_actions %}
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <a class="btn btn-secondary" href="/projects/{{ project.id }}/analyses/{{ run_id }}/log"
+      >Analysis log</a
+    >
+    <a
+      class="btn btn-primary"
+      href="/projects/{{ project.id }}/analyses/new?pr={{ run.pr|default(42) }}"
+      >Analyze this PR again</a
+    >
+  </div>
+{% endblock %}
+{% block page_content %}
+  <p>
+    <span
+      class="badge text-bg-{{ 'success' if run.status == 'Completed' else 'danger' if run.status == 'Failed' else 'warning' }}"
+      >{{ run.status|default('Completed') }}
+    </span>
+    <span class="text-secondary"
+      >Analysis #{{ run_id }} · {{ run.provider|default('OpenAI') }} /
+      {{ run.model|default('gpt-5') }}
+    </span>
+  </p>
+  <div id="pr-diff" data-generation-url="/projects/{{ project.id }}/generations/new"></div>
+  {# prettier-ignore-start #}
+<script type="application/json" id="diff-data">{{ {'diff': diff, 'findings': findings}|tojson }}</script>
+{# prettier-ignore-end #}
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/analysis_result.js') }}{% endblock %}

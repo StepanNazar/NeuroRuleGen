@@ -1,0 +1,71 @@
+{% extends 'layouts/project.html' %}
+{% set editable = is_new_rule or is_quality_security_engineer %}
+{% block page_content %}
+  <form method="post">
+    <section class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5">Rule details</h2>
+        <label class="form-label" for="name">Name</label>
+        <input
+          class="form-control mb-3"
+          id="name"
+          name="name"
+          value="{{ rule.name }}"
+          required
+          {{ 'readonly' if not editable }}
+        />
+        <label class="form-label" for="description">Description</label
+        ><textarea
+          class="form-control mb-3"
+          id="description"
+          name="description"
+          rows="3"
+          {{ 'readonly' if not editable }}
+        >
+{{ rule.description }}</textarea>
+        <dl class="row g-2">
+          <dt class="col-12 col-md-4 text-body-secondary">Author</dt>
+          <dd class="col-12 col-md-8 text-break">developer@example.com</dd>
+          <dt class="col-12 col-md-4 text-body-secondary">Status</dt>
+          <dd class="col-12 col-md-8 text-break">
+            <span class="badge text-bg-secondary">{{ rule.status }} </span>
+          </dd>
+        </dl>
+        {% if rule.generation_id %}
+          <a href="/projects/{{ project.id }}/generations/{{ rule.generation_id }}/log"
+            >Open generation log</a
+          >
+        {% endif %}
+      </div>
+    </section>
+    <label class="form-label" for="code">Rule code</label
+    ><textarea
+      class="form-control font-monospace small mb-4"
+      id="code"
+      name="code"
+      rows="16"
+      required
+      spellcheck="false"
+      {{ 'readonly' if not editable }}
+    >
+{{ rule.code }}</textarea>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      {% if editable %}
+        <button class="btn btn-primary">Save rule</button>
+      {% endif %}
+      <a href="/projects/{{ project.id }}/rules"
+        >{{ 'Cancel' if editable else 'Back to rules' }}
+      </a>
+      {% if not is_new_rule and is_quality_security_engineer %}
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-rule-status="/api/projects/{{ project.id }}/rules/{{ rule.id }}/status"
+        >
+          {{ 'Approve → Disabled' if rule.status == 'Draft' else 'Enable' if rule.status == 'Disabled' else 'Disable' }}
+        </button>
+      {% endif %}
+    </div>
+  </form>
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/rules.js') }}{% endblock %}

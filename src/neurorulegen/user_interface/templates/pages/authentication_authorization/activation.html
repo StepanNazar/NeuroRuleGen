@@ -1,0 +1,10 @@
+{% extends 'layouts/auth.html' %}
+{% block auth_content %}
+  {% if success %}
+    <div class="alert alert-success">Your account has been activated.</div>
+    <a class="btn btn-primary" href="/projects">Go to home</a>
+  {% else %}
+    <div class="alert alert-danger">The activation link is invalid or has expired.</div>
+    <a class="btn btn-primary" href="/profile">Go to profile to resend email</a>
+  {% endif %}
+{% endblock %}

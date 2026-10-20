@@ -1,0 +1,93 @@
+{% extends 'layouts/project.html' %}
+{% block page_content %}
+  <section class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5">Filters</h2>
+      <form method="get" id="usage-filters" class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="model">Model</label>
+          <select class="form-select" id="model" name="model" required>
+            <option value="">Select one model</option>
+            {% for value in ['gpt-5','claude-sonnet'] %}
+              <option {{ 'selected' if model == value }}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="user">User · optional</label>
+          <select class="form-select" name="user" id="user">
+            <option value="">All users</option>
+            {% for value in ['user@example.com','developer@example.com'] %}
+              <option {{ 'selected' if user == value }}>{{ value }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="start">From · optional</label>
+          <input class="form-control" type="date" id="start" name="start" value="{{ start }}" />
+        </div>
+        <div class="col-md-4">
+          <label class="form-label" for="end">To · optional</label>
+          <input class="form-control" type="date" id="end" name="end" value="{{ end }}" />
+        </div>
+        <div class="col-md-4" id="group-field" {% if not (start and end) %}hidden{% endif %}>
+          <label class="form-label" for="group">Group by</label>
+          <select class="form-select" name="group" id="group">
+            <option value="">None</option>
+            <option value="day" {{ 'selected' if group == 'day' }}>Day</option>
+            <option value="month" {{ 'selected' if group == 'month' }}>Month</option>
+          </select>
+        </div>
+        <p class="form-text mb-0">
+          Without user or period filters, usage covers all time for the selected model.
+        </p>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <button class="btn btn-primary">Apply filters</button>
+          <a href="/projects/{{ project.id }}/usage{% if model %}?model={{ model }}{% endif %}"
+            >Clear optional filters</a
+          >
+        </div>
+      </form>
+    </div>
+  </section>
+  {% if not model %}
+    <p>Select a model to view token usage.</p>
+  {% elif not grouped %}
+    <p>No usage matches these filters.</p>
+  {% elif group %}
+    <section aria-label="Grouped token usage">
+      <h2 class="h5">Usage by {{ group }}</h2>
+      {% for period, values in grouped.items() %}
+        <section class="card mb-3">
+          <div class="card-body">
+            <h3 class="h6">{{ period }}</h3>
+            <dl class="d-flex flex-wrap gap-3">
+              {% for label in metrics %}
+                <div>
+                  <dt>{{ label }}</dt>
+                  <dd>{{ '{:,}'.format(values[loop.index0]) }}</dd>
+                </div>
+              {% endfor %}
+            </dl>
+          </div>
+        </section>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section aria-label="Usage summary">
+      <h2 class="h5">Usage summary · {{ model }}</h2>
+      <div class="d-flex flex-wrap gap-3">
+        {% for label in metrics %}
+          <div class="card flex-fill">
+            <div class="card-body">
+              <h3 class="small text-body-secondary">{{ label }}</h3>
+              <div class="fs-2 fw-bold">{{ '{:,}'.format(grouped['summary'][loop.index0]) }}</div>
+              <span class="text-secondary">tokens</span>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
+{% block page_scripts %}{{ vite_assets('js/forms.js') }}{% endblock %}
