@@ -5,7 +5,10 @@
   {% if not is_activated %}
     <div class="alert alert-warning">
       Your account is not activated. Activate it to access projects.
-      <button class="btn btn-sm btn-secondary ms-2" type="button" id="resend-activation">
+      <button class="btn btn-sm btn-secondary ms-2" type="button" id="resend-activation" style="transition: transform 0.1s ease;"
+  onpointerdown="this.style.transform='scale(0.95)'"
+  onpointerup="this.style.transform='scale(1)'"
+  onpointerleave="this.style.transform='scale(1)'">
         Resend activation email
       </button>
     </div>
@@ -84,7 +87,9 @@
     {% if is_activated %}
       <a class="btn btn-primary" href="/projects">Home: my projects</a>
     {% endif %}
-    <a class="btn btn-secondary" href="/logout">Sign out</a>
+    <form action="/logout" method="post" class="d-inline">
+      <button class="btn btn-danger" type="submit">Sign out</button>
+    </form>
   </div>
 {% endblock %}
 {% block page_scripts %}{{ vite_assets('js/profile.js') }}{% endblock %}

@@ -1,7 +1,14 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette import status
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
 
+from neurorulegen.common.config import get_settings
 from neurorulegen.user_interface.rendering import ROOT
 from neurorulegen.web_controllers import (
     ai_configuration,
@@ -10,8 +17,25 @@ from neurorulegen.web_controllers import (
     project_management,
     rule_management,
 )
+from neurorulegen.web_controllers.middlewares import CSRFHeaderProtectionMiddleware
 
-app = FastAPI(title="NeuroRuleGen")
+settings = get_settings()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.settings = settings
+    yield
+app = FastAPI(title="NeuroRuleGen", lifespan=lifespan)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="neurorulegen_session",
+    max_age=30 * 24 * 3600,
+    same_site="strict",
+    https_only=settings.cookies_secure,
+)
+app.add_middleware(CSRFHeaderProtectionMiddleware)
 ROOT.joinpath("static").mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 for module in [
@@ -24,14 +48,14 @@ for module in [
     app.include_router(module.router)
 
 
-@app.middleware("http")
-async def inactive_account(request, call_next):
-    if (
-        request.url.path.startswith("/projects")
-        and not authentication_authorization.profile["is_activated"]
-    ):
-        return RedirectResponse("/profile", status_code=303)
-    return await call_next(request)
+# @app.exception_handler(RequestValidationError)
+# async def validation_exception_handler(request: Request, exc: RequestValidationError):
+#     """
+#     Handle validation errors by redirecting back to the previous page.
+#     """
+#     referer = request.headers.get("referer") or "/"
+#     return RedirectResponse(url=referer, status_code=status.HTTP_303_SEE_OTHER)
+
 
 
 @app.get("/")

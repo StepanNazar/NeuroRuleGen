@@ -11,16 +11,17 @@
       autocomplete="email"
       required
     />
-    <button class="btn btn-secondary" type="button" id="request-code">Get confirmation code</button>
+    <button class="btn btn-secondary" type="button" id="request-code" style="transition: transform 0.1s ease;"
+  onpointerdown="this.style.transform='scale(0.95)'"
+  onpointerup="this.style.transform='scale(1)'"
+  onpointerleave="this.style.transform='scale(1)'">Get confirmation code</button>
     <hr />
     <label class="form-label" for="code">Email confirmation code</label>
     <input
       class="form-control mb-3"
       id="code"
       name="code"
-      inputmode="numeric"
       autocomplete="one-time-code"
-      pattern="[0-9]{6}"
       required
     />{{ password_fields('New password') }}
     <div class="d-flex flex-wrap align-items-center gap-2">

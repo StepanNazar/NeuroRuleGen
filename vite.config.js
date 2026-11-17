@@ -27,9 +27,20 @@ export default defineConfig({
     port: Number(devServer.port || 5173),
     strictPort: true,
     origin: devServer.origin,
+    allowedHosts: [
+      'lvh.me', // this is like localhost but allows subdomains to be used for testing
+      '.lvh.me', // Allows subdomains like tenant.lvh.me
+    ],
     cors: {
       origin: [
-        ...new Set([appOrigin, `http://localhost:${appPort}`, `http://127.0.0.1:${appPort}`]),
+        ...new Set([
+          appOrigin,
+          `http://localhost:${appPort}`,
+          `http://127.0.0.1:${appPort}`,
+          `http://lvh.me:${appPort}`,
+          new RegExp(`^http:\\/\\/.*\\.lvh\\.me:${appPort}$`), // Allows CORS from any subdomain
+            new RegExp(`^http:\\/\\/.*\\.localhost:${appPort}$`), // Allows CORS from any subdomain
+        ]),
       ],
     },
   },
