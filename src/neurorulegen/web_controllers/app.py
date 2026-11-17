@@ -32,7 +32,7 @@ app.add_middleware(
     secret_key=settings.secret_key,
     session_cookie="neurorulegen_session",
     max_age=30 * 24 * 3600,
-    same_site="strict",
+    same_site="lax",
     https_only=settings.cookies_secure,
 )
 app.add_middleware(CSRFHeaderProtectionMiddleware)
@@ -48,13 +48,13 @@ for module in [
     app.include_router(module.router)
 
 
-# @app.exception_handler(RequestValidationError)
-# async def validation_exception_handler(request: Request, exc: RequestValidationError):
-#     """
-#     Handle validation errors by redirecting back to the previous page.
-#     """
-#     referer = request.headers.get("referer") or "/"
-#     return RedirectResponse(url=referer, status_code=status.HTTP_303_SEE_OTHER)
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handle validation errors by redirecting back to the previous page.
+    """
+    referer = request.headers.get("referer") or "/"
+    return RedirectResponse(url=referer, status_code=status.HTTP_303_SEE_OTHER)
 
 
 

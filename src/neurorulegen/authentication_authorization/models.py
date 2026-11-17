@@ -47,7 +47,12 @@ class User(Base):
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     login_blocked: Mapped[bool] = mapped_column(Boolean, server_default=false())
     github_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
-    github_access_token_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)
+    github_access_token_encrypted: Mapped[bytes | None] = mapped_column(
+        EncryptedBytes(get_settings().fernet_key)
+    )
+    github_refresh_token_encrypted: Mapped[bytes | None] = mapped_column(
+        EncryptedBytes(get_settings().fernet_key)
+    )
     totp_secret_encrypted: Mapped[bytes | None] = mapped_column(EncryptedBytes(get_settings().fernet_key))
     totp_enabled: Mapped[bool] = mapped_column(Boolean, server_default=false())
 

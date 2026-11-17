@@ -17,11 +17,19 @@ class AuthRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_user_by_github_id(self, github_user_id: int) -> User | None:
+        pass
+
+    @abstractmethod
     async def create_user(
         self,
         email: str,
-        password_hash: str,
+        password_hash: str | None = None,
         display_name: str | None = None,
+        github_user_id: int | None = None,
+        github_access_token_encrypted: bytes | None = None,
+        github_refresh_token_encrypted: bytes | None = None,
+        activated_at: datetime | None = None,
     ) -> User:
         pass
 
@@ -56,16 +64,29 @@ class SQLAlchemyAuthRepository(AuthRepository):
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_user_by_github_id(self, github_user_id: int) -> User | None:
+        stmt = select(User).where(User.github_user_id == github_user_id)
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def create_user(
         self,
         email: str,
-        password_hash: str,
+        password_hash: str | None = None,
         display_name: str | None = None,
+        github_user_id: int | None = None,
+        github_access_token_encrypted: bytes | None = None,
+        github_refresh_token_encrypted: bytes | None = None,
+        activated_at: datetime | None = None,
     ) -> User:
         user = User(
             email=email,
             password_hash=password_hash,
             display_name=display_name,
+            github_user_id=github_user_id,
+            github_access_token_encrypted=github_access_token_encrypted,
+            github_refresh_token_encrypted=github_refresh_token_encrypted,
+            activated_at=activated_at,
         )
         self._session.add(user)
         await self._session.flush()

@@ -1,5 +1,7 @@
 """Authentication and authorization web routes."""
 
+import secrets
+from datetime import datetime, timezone
 from typing import Annotated
 from urllib.parse import quote_plus
 
@@ -21,6 +23,7 @@ from neurorulegen.authentication_authorization.services import (
     UserAlreadyExistsError,
     NoPasswordError, HCaptchaService, CaptchaService, MockEmailService, EmailService, BrevoEmailService,
     TOTPService,
+    GitHubOAuthService,
 )
 from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import get_db_session
@@ -51,6 +54,15 @@ def get_captcha_service() -> "CaptchaService":
 
 def get_email_service() -> "EmailService":
     return BrevoEmailService()
+
+def get_github_oauth_service() -> GitHubOAuthService:
+    settings = get_settings()
+    return GitHubOAuthService(
+        client_id=settings.github_client_id,
+        client_secret=settings.github_client_secret,
+        redirect_uri=settings.github_redirect_uri,
+        app_slug=settings.github_app_slug,
+    )
 
 async def get_current_user(
     request: Request,
@@ -172,7 +184,167 @@ async def login(
 
 
 @router.get("/github/connect")
-def github_connect():
+async def github_connect(
+    request: Request,
+    oauth_service: GitHubOAuthService = Depends(get_github_oauth_service),  # noqa: B008
+):
+    verifier, challenge = oauth_service.generate_pkce_pair()
+    state = secrets.token_urlsafe(32)
+    request.session["github_oauth_state"] = state
+    request.session["github_code_verifier"] = verifier
+
+    auth_url = oauth_service.get_authorization_url(state=state, code_challenge=challenge)
+    return RedirectResponse(auth_url, status_code=303)
+
+
+@router.get("/auth/github/callback")
+async def github_callback(  # noqa: C901, PLR0912
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+    oauth_service: GitHubOAuthService = Depends(get_github_oauth_service),  # noqa: B008
+    repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
+):
+    if error:
+        err_msg = error_description or error
+        return RedirectResponse(
+            f"/login?notice={quote_plus(f'GitHub authentication failed: {err_msg}')}&notice_type=danger",
+            status_code=303,
+        )
+
+    saved_state = request.session.pop("github_oauth_state", None)
+    code_verifier = request.session.pop("github_code_verifier", None)
+
+    if not state or not saved_state or not secrets.compare_digest(state, saved_state):
+        return RedirectResponse(
+            f"/login?notice={quote_plus('Invalid OAuth state. Please try again.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    if not code or not code_verifier:
+        return RedirectResponse(
+            f"/login?notice={quote_plus('Missing authorization code or verifier.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    try:
+        tokens = await oauth_service.exchange_code_for_tokens(code, code_verifier)
+    except Exception as e:
+        return RedirectResponse(
+            f"/login?notice={quote_plus('Failed to exchange code with GitHub.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    access_token = tokens.get("access_token")
+    refresh_token = tokens.get("refresh_token")
+    if not access_token:
+        error_msg = tokens.get("error_description") or tokens.get("error") or "Unknown error"
+        return RedirectResponse(
+            f"/login?notice={quote_plus(f'GitHub error: {error_msg}')}&notice_type=danger",
+            status_code=303,
+        )
+
+    try:
+        profile = await oauth_service.get_user_profile(access_token)
+    except Exception:
+        return RedirectResponse(
+            f"/login?notice={quote_plus('Failed to fetch profile from GitHub.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    github_id = profile["github_id"]
+    email = profile.get("email")
+    display_name = profile.get("name") or profile.get("login")
+
+    access_token_enc = access_token.encode()
+    refresh_token_enc = refresh_token.encode() if refresh_token else None
+
+    current_user_id = request.session.get("user_id")
+
+    # Scenario 1: Already logged in user connecting their GitHub account
+    if current_user_id:
+        user = await repository.get_user_by_id(current_user_id)
+        if not user:
+            return RedirectResponse("/login", status_code=303)
+
+        existing_github_user = await repository.get_user_by_github_id(github_id)
+        if existing_github_user and existing_github_user.id != user.id:
+            return RedirectResponse(
+                f"/profile?notice={quote_plus('This GitHub account is already connected to another user.')}&notice_type=danger",
+                status_code=303,
+            )
+
+        user.github_user_id = github_id
+        user.github_access_token_encrypted = access_token_enc
+        if refresh_token_enc:
+            user.github_refresh_token_encrypted = refresh_token_enc
+        await repository.commit()
+        return RedirectResponse(
+            f"/profile?notice={quote_plus('GitHub account connected successfully.')}&notice_type=success",
+            status_code=303,
+        )
+
+    # Scenario 2: Login or Registration via GitHub
+    user = await repository.get_user_by_github_id(github_id)
+    if not user:
+        if not email:
+            return RedirectResponse(
+                f"/login?notice={quote_plus('No verified primary email found on your GitHub account.')}&notice_type=danger",
+                status_code=303,
+            )
+
+        # Check if user with this email already exists
+        user = await repository.get_user_by_email(email)
+        if user:
+            user.github_user_id = github_id
+            user.github_access_token_encrypted = access_token_enc
+            if refresh_token_enc:
+                user.github_refresh_token_encrypted = refresh_token_enc
+            if not user.activated_at:
+                user.activated_at = datetime.now(timezone.utc)
+            await repository.commit()
+        else:
+            user = await repository.create_user(
+                email=email,
+                display_name=display_name,
+                github_user_id=github_id,
+                github_access_token_encrypted=access_token_enc,
+                github_refresh_token_encrypted=refresh_token_enc,
+                activated_at=datetime.now(timezone.utc),
+            )
+            await repository.commit()
+    else:
+        # Update latest tokens
+        user.github_access_token_encrypted = access_token_enc
+        if refresh_token_enc:
+            user.github_refresh_token_encrypted = refresh_token_enc
+        await repository.commit()
+
+    if user.login_blocked:
+        return render(
+            request,
+            "pages/authentication_authorization/login.html",
+            "Sign in",
+            is_admin=False,
+            is_quality_security_engineer=False,
+            is_activated=True,
+            notification="Your account has been blocked due to multiple failed login attempts. Contact an administrator to unblock your account.",
+            notification_type="danger",
+            hcaptcha_sitekey=request.app.state.settings.hcaptcha_sitekey,
+        )
+
+    if user.totp_enabled:
+        request.session["totp_user_id"] = user.id
+        target = (
+            "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/projects"
+        )
+        return RedirectResponse(f"/totp/verify?next={quote_plus(target)}", status_code=303)
+
+    request.session["user_id"] = user.id
+    if user.system_role == SystemRole.ADMINISTRATOR:
+        return RedirectResponse("/admin", status_code=303)
     return RedirectResponse("/profile", status_code=303)
 
 

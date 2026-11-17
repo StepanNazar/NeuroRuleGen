@@ -1,6 +1,10 @@
+import base64
+import hashlib
 import re
+import secrets
 from abc import abstractmethod, ABC
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urlencode
 
 import jwt
 from argon2 import PasswordHasher
@@ -328,3 +332,93 @@ class TOTPService:
             return False
         secret = user.totp_secret_encrypted.decode()
         return self.verify_code(secret, code)
+
+
+class GitHubOAuthService:
+    AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
+    TOKEN_URL = "https://github.com/login/oauth/access_token"
+    API_BASE_URL = "https://api.github.com"
+
+    def __init__(self, client_id: str, client_secret: str, redirect_uri: str, app_slug: str):
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.redirect_uri = redirect_uri
+        self.app_slug = app_slug
+
+    @staticmethod
+    def generate_pkce_pair() -> tuple[str, str]:
+        verifier = secrets.token_urlsafe(64)
+        digest = hashlib.sha256(verifier.encode("ascii")).digest()
+        challenge = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+        return verifier, challenge
+
+    def get_authorization_url(self, state: str, code_challenge: str) -> str:
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "state": state,
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+        return f"{self.AUTHORIZE_URL}?{urlencode(params)}"
+
+    async def exchange_code_for_tokens(self, code: str, code_verifier: str) -> dict:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                self.TOKEN_URL,
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "code": code,
+                    "redirect_uri": self.redirect_uri,
+                    "code_verifier": code_verifier,
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    async def refresh_user_token(self, refresh_token: str) -> dict:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                self.TOKEN_URL,
+                headers={"Accept": "application/json"},
+                data={
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()
+
+    def _api_headers(self, access_token: str) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+    async def get_user_profile(self, access_token: str) -> dict:
+        headers = self._api_headers(access_token)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            user_resp = await client.get(f"{self.API_BASE_URL}/user", headers=headers)
+            user_resp.raise_for_status()
+            user_data = user_resp.json()
+
+            emails_resp = await client.get(f"{self.API_BASE_URL}/user/emails", headers=headers)
+            emails_resp.raise_for_status()
+            for item in emails_resp.json():
+                if item.get("primary") and item.get("verified"):
+                    email = item["email"]
+                    break
+
+            return {
+                "github_id": user_data["id"],
+                "login": user_data["login"],
+                "name": user_data.get("name"),
+                "avatar_url": user_data.get("avatar_url"),
+                "email": email,
+            }
+
