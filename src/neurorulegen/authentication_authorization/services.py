@@ -6,6 +6,8 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 import httpx
+import pyotp
+import segno
 from brevo import AsyncBrevo, SendTransacEmailRequestSender, SendTransacEmailRequestToItem
 
 from neurorulegen.authentication_authorization.models import User
@@ -286,3 +288,43 @@ class BrevoEmailService(EmailService):
 class MockEmailService(EmailService):
     async def send_email(self, to_name: str, to_email: str, subject: str, body: str) -> None:
         print(f"Mock email sent to {to_name} <{to_email}> with subject '{subject}' and body:\n{body}")
+
+
+class TOTPService:
+    def __init__(self, repository: AuthRepository) -> None:
+        self.repository = repository
+
+    def generate_secret(self) -> str:
+        return pyotp.random_base32()
+
+    def get_provisioning_uri(self, secret: str, email: str, issuer_name: str = "NeuroRuleGen") -> str:
+        """Get the URI which will be used to generate the QR code for TOTP setup."""
+        totp = pyotp.TOTP(secret)
+        return totp.provisioning_uri(name=email, issuer_name=issuer_name)
+
+    def generate_qr_svg(self, uri: str) -> str:
+        qr = segno.make_qr(uri)
+        return qr.svg_data_uri()
+
+    def verify_code(self, secret: str, code: str) -> bool:
+        totp = pyotp.TOTP(secret)
+        return bool(totp.verify(code.strip()))
+
+    async def setup_totp(self, user: User, secret: str, code: str) -> bool:
+        if not self.verify_code(secret, code):
+            return False
+        user.totp_secret_encrypted = secret.encode()
+        user.totp_enabled = True
+        await self.repository.commit()
+        return True
+
+    async def disable_totp(self, user: User) -> None:
+        user.totp_enabled = False
+        user.totp_secret_encrypted = None
+        await self.repository.commit()
+
+    async def verify_user_totp(self, user: User, code: str) -> bool:
+        if not user.totp_enabled or not user.totp_secret_encrypted:
+            return False
+        secret = user.totp_secret_encrypted.decode()
+        return self.verify_code(secret, code)

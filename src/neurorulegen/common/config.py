@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     password_reset_token_expiration_minutes: int
     email_jwt_secret: str
     base_url: str
+    fernet_key: str
 
     @property
     def database_url(self) -> URL:

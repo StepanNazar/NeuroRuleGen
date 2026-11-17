@@ -3,6 +3,7 @@
 from typing import Annotated
 from urllib.parse import quote_plus
 
+from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, Form, Request, BackgroundTasks, Body
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ from neurorulegen.authentication_authorization.services import (
     PasswordPolicyError,
     UserAlreadyExistsError,
     NoPasswordError, HCaptchaService, CaptchaService, MockEmailService, EmailService, BrevoEmailService,
+    TOTPService,
 )
 from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import get_db_session
@@ -37,6 +39,12 @@ def get_auth_service(
     repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
 ) -> AuthService:
     return AuthService(repository)
+
+
+def get_totp_service(
+    repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
+) -> TOTPService:
+    return TOTPService(repository)
 
 def get_captcha_service() -> "CaptchaService":
     return HCaptchaService(secret_key=get_settings().hcaptcha_secret)
@@ -59,7 +67,6 @@ async def get_current_user(
 @router.get("/register")
 @router.get("/password-recovery")
 @router.get("/totp/verify")
-@router.get("/totp/setup")
 def account_pages(request: Request):
     if request.session.get("user_id"):
         return RedirectResponse("/profile", status_code=303)
@@ -68,7 +75,6 @@ def account_pages(request: Request):
         "/register": ("register", "Register"),
         "/password-recovery": ("recovery", "Recover password"),
         "/totp/verify": ("totp_login", "Verify your sign-in"),
-        "/totp/setup": ("totp_setup", "Set up two-factor authentication"),
     }
     page, title = pages[request.url.path]
     success = request.query_params.get("result", "success") == "success"
@@ -137,8 +143,6 @@ async def login(
         user = await auth_service.login_user(email=email, password=password)
         if user is None:
             return error_response
-        request.session["user_id"] = user.id
-        return RedirectResponse("/profile", status_code=303)
     except NoPasswordError:
         return error_response
 
@@ -155,13 +159,16 @@ async def login(
         )
 
     if user.totp_enabled:
+        request.session["totp_user_id"] = user.id
         target = (
             "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/projects"
         )
-        return RedirectResponse(f"/totp/verify?next={target}", status_code=303)
+        return RedirectResponse(f"/totp/verify?next={quote_plus(target)}", status_code=303)
 
+    request.session["user_id"] = user.id
     if user.system_role == SystemRole.ADMINISTRATOR:
         return RedirectResponse("/admin", status_code=303)
+    return RedirectResponse("/profile", status_code=303)
 
 
 @router.get("/github/connect")
@@ -355,22 +362,116 @@ def send_activation_email(
     background_tasks.add_task(send_activation_email)
     return {"accepted": True}
 
+@router.get("/totp/setup")
+async def totp_setup_page(
+    request: Request,
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+    totp_service: TOTPService = Depends(get_totp_service),  # noqa: B008
+):
+    if not current_user:
+        return RedirectResponse("/login", status_code=303)
+    if current_user.totp_enabled:
+        return RedirectResponse(
+            f"/profile?notice={quote_plus('Two-factor authentication is already enabled.')}&notice_type=info",
+            status_code=303,
+        )
+
+    fernet = Fernet(get_settings().fernet_key.encode())
+    secret = request.session.get("totp_setup_secret")
+    if not secret:
+        secret = totp_service.generate_secret()
+        request.session["totp_setup_secret"] = fernet.encrypt(secret.encode()).decode()
+    else:
+        secret = fernet.decrypt(secret.encode()).decode()
+
+    uri = totp_service.get_provisioning_uri(secret=secret, email=current_user.email)
+    qr_svg = totp_service.generate_qr_svg(uri)
+
+    return render(
+        request,
+        "pages/authentication_authorization/totp_setup.html",
+        "Set up two-factor authentication",
+        secret=secret,
+        qr_code_svg=qr_svg,
+        is_admin=current_user.system_role == SystemRole.ADMINISTRATOR,
+        is_quality_security_engineer=False,
+        is_activated=current_user.activated_at is not None,
+        notification=request.query_params.get("notice", ""),
+        notification_type=request.query_params.get("notice_type", "info"),
+    )
 
 @router.delete("/api/profile/totp")
-def disable_totp():
+async def disable_totp(
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+    totp_service: TOTPService = Depends(get_totp_service),  # noqa: B008
+):
+    if not current_user:
+        return {"error": "Unauthorized"}
+    await totp_service.disable_totp(current_user)
     return {"enabled": False}
 
+
 @router.post("/totp/verify")
-def verify_totp(request: Request):
+async def verify_totp(
+    request: Request,
+    code: str = Form(...),
+    auth_repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
+    totp_service: TOTPService = Depends(get_totp_service),  # noqa: B008
+):
     target = request.query_params.get("next", "/projects")
-    return RedirectResponse(
-        "/admin" if target == "/admin" else "/projects", status_code=303
-    )
+    user_id = request.session.get("totp_user_id") or request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse("/login", status_code=303)
+
+    user = await auth_repository.get_user_by_id(user_id)
+    if not user:
+        return RedirectResponse("/login", status_code=303)
+
+    if not await totp_service.verify_user_totp(user, code):
+        return RedirectResponse(
+            f"/totp/verify?next={quote_plus(target)}&notice={quote_plus('Invalid authentication code.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    request.session.pop("totp_user_id", None)
+    request.session["user_id"] = user.id
+
+    if target == "/admin" and user.system_role == SystemRole.ADMINISTRATOR:
+        return RedirectResponse("/admin", status_code=303)
+    return RedirectResponse(target if target.startswith("/") else "/projects", status_code=303)
 
 
 @router.post("/totp/setup")
-def setup_totp():
-    return RedirectResponse("/profile", status_code=303)
+async def setup_totp(
+    request: Request,
+    code: str = Form(...),
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+    totp_service: TOTPService = Depends(get_totp_service),  # noqa: B008
+):
+    if not current_user:
+        return RedirectResponse("/login", status_code=303)
+
+    secret = request.session.get("totp_setup_secret")
+    if not secret:
+        return RedirectResponse(
+            f"/totp/setup?notice={quote_plus('Setup session expired. Please try again.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    fernet = Fernet(get_settings().fernet_key.encode())
+    secret = fernet.decrypt(secret.encode()).decode()
+    success = await totp_service.setup_totp(user=current_user, secret=secret, code=code)
+    if not success:
+        return RedirectResponse(
+            f"/totp/setup?notice={quote_plus('Invalid verification code. Please try again.')}&notice_type=danger",
+            status_code=303,
+        )
+
+    request.session.pop("totp_setup_secret", None)
+    return RedirectResponse(
+        f"/profile?notice={quote_plus('Two-factor authentication enabled successfully.')}&notice_type=success",
+        status_code=303,
+    )
 
 
 @router.post("/logout")

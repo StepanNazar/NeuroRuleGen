@@ -1,7 +1,7 @@
 {% extends 'layouts/auth.html' %}
 {% block auth_content %}
   <p>Enter the code from your authenticator app.</p>
-  <form method="post">
+  <form method="post" action="/totp/verify{% if request.query_params.get('next') %}?next={{ request.query_params.get('next') }}{% endif %}">
     <label class="form-label" for="code">One-time code</label>
     <input
       class="form-control mb-4"
@@ -14,7 +14,7 @@
       required
     />
     <div class="d-flex flex-wrap align-items-center gap-2">
-      <button class="btn btn-primary">Continue</button>
+      <button class="btn btn-primary" type="submit">Continue</button>
       <a class="btn btn-secondary" href="/login">Back to sign in</a>
     </div>
   </form>

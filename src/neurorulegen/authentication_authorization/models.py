@@ -17,7 +17,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import CITEXT, INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import Base
+from neurorulegen.common.encrypted_types import EncryptedBytes
 
 
 class SystemRole(str, enum.Enum):
@@ -46,7 +48,7 @@ class User(Base):
     login_blocked: Mapped[bool] = mapped_column(Boolean, server_default=false())
     github_user_id: Mapped[int | None] = mapped_column(BigInteger, unique=True)
     github_access_token_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)
-    totp_secret_encrypted: Mapped[bytes | None] = mapped_column(LargeBinary)
+    totp_secret_encrypted: Mapped[bytes | None] = mapped_column(EncryptedBytes(get_settings().fernet_key))
     totp_enabled: Mapped[bool] = mapped_column(Boolean, server_default=false())
 
     __table_args__ = (

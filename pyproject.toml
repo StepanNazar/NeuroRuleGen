@@ -18,7 +18,10 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "httpx",
     "brevo-python",
-    "PyJWT"
+    "PyJWT",
+    "pyotp",
+    "segno",
+    "cryptography",
 ]
 
 [build-system]
