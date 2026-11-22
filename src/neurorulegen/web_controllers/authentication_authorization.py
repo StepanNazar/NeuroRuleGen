@@ -23,7 +23,8 @@ from neurorulegen.authentication_authorization.services import (
     UserAlreadyExistsError,
     NoPasswordError, HCaptchaService, CaptchaService, MockEmailService, EmailService, BrevoEmailService,
     TOTPService,
-    GitHubOAuthService, GitHubRefreshTokenError,
+    GitHubOAuthService, GitHubRefreshTokenError, RateLimiterService, FailedLoginAttemptLogBasedRateLimiterService,
+    TooManyAttemptsError,
 )
 from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import get_db_session
@@ -37,11 +38,21 @@ def get_auth_repository(
 ) -> AuthRepository:
     return SQLAlchemyAuthRepository(db)
 
+def get_rate_limiter(
+    repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
+) -> RateLimiterService:
+    return FailedLoginAttemptLogBasedRateLimiterService(
+        repository,
+        max_attempts_per_ip=get_settings().max_login_attempts_per_ip,
+        max_attempts_per_email=get_settings().max_login_attempts_per_email,
+        time_window_minutes=get_settings().max_login_attempts_time_window_minutes
+    )
 
 def get_auth_service(
     repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
+    rate_limiter: RateLimiterService = Depends(get_rate_limiter),  # noqa: B008
 ) -> AuthService:
-    return AuthService(repository)
+    return AuthService(repository, rate_limiter)
 
 
 def get_totp_service(
@@ -159,11 +170,21 @@ async def login(
         status_code=303
     )
     try:
-        user = await auth_service.login_user(email=email, password=password)
+        user = await auth_service.login_user(
+            email=email,
+            password=password,
+            ip_address=client_ip or "0.0.0.0",
+            user_agent=request.headers.get("User-Agent")
+        )
         if user is None:
             return error_response
     except NoPasswordError:
         return error_response
+    except TooManyAttemptsError:
+        return RedirectResponse(
+            f"/login?notice={quote_plus('Too many failed login attempts. Please try again later.')}&notice_type=danger",
+            status_code=303
+        )
 
     if user.login_blocked:
         return render(
@@ -356,6 +377,7 @@ async def github_callback(  # noqa: C901, PLR0912
 
     request.session["user_id"] = user.id
     if user.system_role == SystemRole.ADMINISTRATOR:
+        request.session["admin"] = True
         return RedirectResponse("/admin", status_code=303)
     return RedirectResponse("/profile", status_code=303)
 
@@ -666,19 +688,22 @@ def logout(request: Request):
 
 @router.get("/admin")
 def admin_page(request: Request, email: str = "", minimum: int = 0):
-    p = pagination_context(request, len(failed))
-    bp = pagination_context(request, len(blocked), "blocked_page")
+    if not request.session.get("admin"):
+        return RedirectResponse("/login", status_code=303)
+
+    p = pagination_context(request, 0)
+    bp = pagination_context(request, 0, "blocked_page")
     return render(
         request,
         "pages/authentication_authorization/admin.html",
         "Account security",
         is_admin=True,
-        is_quality_security_engineer=False,
-        is_activated=True,
-        accounts=failed[(p["page"] - 1) * p["page_size"] : p["page"] * p["page_size"]],
-        blocked=blocked[
-            (bp["page"] - 1) * bp["page_size"] : bp["page"] * bp["page_size"]
-        ],
+        accounts=[],
+        blocked=[],
+        # accounts=failed[(p["page"] - 1) * p["page_size"] : p["page"] * p["page_size"]],
+        # blocked=blocked[
+        #     (bp["page"] - 1) * bp["page_size"] : bp["page"] * bp["page_size"]
+        # ],
         pager=p,
         blocked_pager=bp,
         email=email,

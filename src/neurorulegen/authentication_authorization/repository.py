@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from neurorulegen.authentication_authorization.models import User
+from neurorulegen.authentication_authorization.models import User, FailedLoginAttempt
 
 
 class AuthRepository(ABC):
@@ -47,6 +47,18 @@ class AuthRepository(ABC):
 
     @abstractmethod
     def update_user_password(self, user: User, new_password_hash: str) -> None:
+        pass
+
+    @abstractmethod
+    async def log_failed_login_attempt(self, email: str, ip_address: str, user_agent: str | None) -> None:
+        pass
+
+    @abstractmethod
+    async def counts_failed_login_attempts_from_ip(self, ip_address: str, time_window_minutes: int) -> int:
+        pass
+
+    @abstractmethod
+    async def counts_failed_login_attempts_from_email(self, email: str, time_window_minutes: int) -> int:
         pass
 
 
@@ -100,6 +112,34 @@ class SQLAlchemyAuthRepository(AuthRepository):
 
     def update_user_password(self, user: User, new_password_hash: str) -> None:
         user.password_hash = new_password_hash
+
+    async def log_failed_login_attempt(self, email: str, ip_address: str, user_agent: str | None) -> None:
+        user = await self.get_user_by_email(email)
+        if user is not None:
+            user_id = user.id
+        else:
+            user_id = None
+        failed_attempt = FailedLoginAttempt(
+            user_id=user_id,
+            entered_email=email,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        self._session.add(failed_attempt)
+
+    async def _count_failed_login_attempts(self, filter_condition, time_window_minutes: int) -> int:
+        stmt = select(func.count()).select_from(FailedLoginAttempt).where(
+            filter_condition,
+            FailedLoginAttempt.attempted_at >= func.now() - timedelta(minutes=time_window_minutes)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar() or 0
+
+    async def counts_failed_login_attempts_from_ip(self, ip_address: str, time_window_minutes: int) -> int:
+        return await self._count_failed_login_attempts(FailedLoginAttempt.ip_address == ip_address, time_window_minutes)
+
+    async def counts_failed_login_attempts_from_email(self, email: str, time_window_minutes: int) -> int:
+        return await self._count_failed_login_attempts(FailedLoginAttempt.entered_email == email, time_window_minutes)
 
     async def commit(self) -> None:
         await self._session.commit()

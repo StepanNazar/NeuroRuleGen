@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
     github_redirect_uri: str = ""
+    max_login_attempts_per_ip: int
+    max_login_attempts_per_email: int
+    max_login_attempts_time_window_minutes: int
 
     @property
     def database_url(self) -> URL:

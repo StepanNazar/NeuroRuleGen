@@ -32,6 +32,9 @@ class UserAlreadyExistsError(AuthError):
 class PasswordPolicyError(AuthError):
     """Raised when a password does not satisfy security requirements."""
 
+class TooManyAttemptsError(AuthError):
+    """Raised when a user exceeds the allowed number of login attempts."""
+
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
@@ -77,8 +80,9 @@ def validate_password_policy(password: str) -> tuple[bool, str]:
 
 
 class AuthService:
-    def __init__(self, repository: AuthRepository) -> None:
+    def __init__(self, repository: AuthRepository, rate_limiter: "RateLimiterService") -> None:
         self.repository = repository
+        self.rate_limiter = rate_limiter
 
     def hash_password(self, password: str) -> str:
         return hash_password(password)
@@ -115,18 +119,30 @@ class AuthService:
         await self.repository.commit()
         return user
 
-    async def login_user(self, email: str, password: str) -> User | None:
+    async def login_user(self, email: str, password: str, ip_address: str, user_agent: str | None) -> User | None:
+        if not await self.rate_limiter.is_allowed(email, ip_address):
+            raise TooManyAttemptsError("Too many failed login attempts. Please try again later.")
+        await self.rate_limiter.record_attempt(email, ip_address)
+
         clean_email = email.strip()
         user = await self.repository.get_user_by_email(clean_email)
         if not user:
             self.verify_password(password, FAKE_HASHED_PASSWORD)  # Mitigate timing attacks
+            await self.log_failed_login_attempt(clean_email, ip_address, user_agent)
             return None
         if not user.password_hash:
             self.verify_password(password, FAKE_HASHED_PASSWORD)  # Mitigate timing attacks
+            await self.log_failed_login_attempt(clean_email, ip_address, user_agent)
             raise NoPasswordError("User does not have a password.")
         if not self.verify_password(password, user.password_hash):
+            await self.log_failed_login_attempt(clean_email, ip_address, user_agent)
             return None
         return user
+
+    async def log_failed_login_attempt(self, email: str, ip_address: str, user_agent: str | None) -> None:
+        clean_email = email.strip()
+        await self.repository.log_failed_login_attempt(clean_email, ip_address, user_agent)
+        await self.repository.commit()
 
     async def get_user_by_email(self, email: str) -> User | None:
         return await self.repository.get_user_by_email(email)
@@ -225,6 +241,51 @@ class AuthService:
         self.repository.update_user_password(user, new_hashed_password)
         await self.repository.commit()
         return user
+
+class RateLimiterService(ABC):
+    def __init__(self, max_attempts_per_email: int, max_attempts_per_ip: int, time_window_minutes: int):
+        self.max_attempts_per_email = max_attempts_per_email
+        self.max_attempts_per_ip = max_attempts_per_ip
+        self.time_window_minutes = time_window_minutes
+
+    async def is_allowed(self, email: str, ip_address: str) -> bool:
+        """
+        Check if the action is allowed for the given email and IP address.
+        Returns True if allowed, False if rate limit exceeded.
+        """
+        login_attempts_from_ip_address = await self.count_attempts_from_ip(ip_address)
+        login_attempts_from_email = await self.count_attempts_from_email(email)
+        if login_attempts_from_ip_address >= self.max_attempts_per_ip:
+            return False
+        if login_attempts_from_email >= self.max_attempts_per_email:
+            return False
+        return True
+
+    @abstractmethod
+    async def record_attempt(self, email: str, ip_address: str) -> None:
+        ...
+
+    @abstractmethod
+    async def count_attempts_from_ip(self, ip_address: str) -> int:
+        ...
+
+    @abstractmethod
+    async def count_attempts_from_email(self, email: str) -> int:
+        ...
+
+class FailedLoginAttemptLogBasedRateLimiterService(RateLimiterService):
+    def __init__(self, repository: AuthRepository, max_attempts_per_email: int, max_attempts_per_ip: int, time_window_minutes: int):
+        super().__init__(max_attempts_per_email, max_attempts_per_ip, time_window_minutes)
+        self.repository = repository
+
+    async def record_attempt(self, email: str, ip_address: str) -> None:
+        pass # auth service already logs failed attempts
+
+    async def count_attempts_from_ip(self, ip_address: str) -> int:
+        return await self.repository.counts_failed_login_attempts_from_ip(ip_address, self.time_window_minutes)
+
+    async def count_attempts_from_email(self, email: str) -> int:
+        return await self.repository.counts_failed_login_attempts_from_email(email, self.time_window_minutes)
 
 class CaptchaService(ABC):
     @abstractmethod
