@@ -27,7 +27,6 @@ class Settings(BaseSettings):
     github_client_id: str = ""
     github_client_secret: str = ""
     github_redirect_uri: str = ""
-    github_app_slug: str = ""
 
     @property
     def database_url(self) -> URL:

@@ -334,16 +334,73 @@ class TOTPService:
         return self.verify_code(secret, code)
 
 
+class GitHubRefreshTokenError(AuthError):
+    """Raised when a GitHub refresh token is invalid or expired."""
+
 class GitHubOAuthService:
     AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
     TOKEN_URL = "https://github.com/login/oauth/access_token"
     API_BASE_URL = "https://api.github.com"
+    SCOPE = "read:user,user:email,repo"
 
-    def __init__(self, client_id: str, client_secret: str, redirect_uri: str, app_slug: str):
+    def __init__(self, client_id: str, client_secret: str, redirect_uri: str, auth_repository: AuthRepository):
         self.client_id = client_id
         self.client_secret = client_secret
         self.redirect_uri = redirect_uri
-        self.app_slug = app_slug
+        self.auth_repository = auth_repository
+
+    async def _request_with_token_refresh(
+            self,
+            client: httpx.AsyncClient,
+            method: str,
+            url: str,
+            user_id: int | None = None,
+            access_token: str | None = None
+    ) -> httpx.Response:
+        user = None
+        if access_token is None:
+            if user_id is None:
+                raise ValueError("Either access_token or user_id must be provided.")
+            user = await self.auth_repository.get_user_by_id(user_id)
+            if not user or not user.github_access_token_encrypted:
+                raise AuthError("User does not have a GitHub access token.")
+            access_token = user.github_access_token_encrypted.decode()
+
+        headers = self._api_headers(access_token)
+
+        try:
+            response = await client.request(method.upper(), url, headers=headers)
+        except httpx.HTTPError as e:
+            raise AuthError from e
+
+        if response.status_code == 401:
+            if user_id is None:
+                raise AuthError
+            user = user or await self.auth_repository.get_user_by_id(user_id)
+            if not user or not user.github_refresh_token_encrypted:
+                raise GitHubRefreshTokenError("User does not have a GitHub refresh token.")
+
+            refresh_token = user.github_refresh_token_encrypted.decode()
+            try:
+                new_tokens = await self._refresh_user_token(refresh_token)
+            except httpx.HTTPError as e:
+                raise GitHubRefreshTokenError from e
+            if new_tokens.get("error") == "bad_refresh_token":
+                raise GitHubRefreshTokenError("GitHub refresh token is invalid or expired.")
+            user.github_access_token_encrypted = new_tokens["access_token"].encode()
+            if "refresh_token" in new_tokens:
+                user.github_refresh_token_encrypted = new_tokens["refresh_token"].encode()
+            await self.auth_repository.commit()
+
+            # Retry the request with the new access token
+            access_token = new_tokens["access_token"]
+            headers = self._api_headers(access_token)
+            try:
+                response = await client.request(method.upper(), url, headers=headers)
+            except httpx.HTTPError as e:
+                raise AuthError from e
+
+        return response
 
     @staticmethod
     def generate_pkce_pair() -> tuple[str, str]:
@@ -359,26 +416,30 @@ class GitHubOAuthService:
             "state": state,
             "code_challenge": code_challenge,
             "code_challenge_method": "S256",
+            "scope": self.SCOPE
         }
         return f"{self.AUTHORIZE_URL}?{urlencode(params)}"
 
     async def exchange_code_for_tokens(self, code: str, code_verifier: str) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                self.TOKEN_URL,
-                headers={"Accept": "application/json"},
-                data={
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "code": code,
-                    "redirect_uri": self.redirect_uri,
-                    "code_verifier": code_verifier,
-                },
-            )
-            resp.raise_for_status()
+            try:
+                resp = await client.post(
+                    self.TOKEN_URL,
+                    headers={"Accept": "application/json"},
+                    data={
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                        "code": code,
+                        "redirect_uri": self.redirect_uri,
+                        "code_verifier": code_verifier,
+                    },
+                )
+                resp.raise_for_status()
+            except httpx.HTTPError as e:
+                raise AuthError from e
             return resp.json()
 
-    async def refresh_user_token(self, refresh_token: str) -> dict:
+    async def _refresh_user_token(self, refresh_token: str) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
                 self.TOKEN_URL,
@@ -401,14 +462,29 @@ class GitHubOAuthService:
         }
 
     async def get_user_profile(self, access_token: str) -> dict:
-        headers = self._api_headers(access_token)
         async with httpx.AsyncClient(timeout=10.0) as client:
-            user_resp = await client.get(f"{self.API_BASE_URL}/user", headers=headers)
-            user_resp.raise_for_status()
+            user_resp = await self._request_with_token_refresh(
+                client,
+                "GET",
+                f"{self.API_BASE_URL}/user",
+                access_token=access_token
+            )
+            try:
+                user_resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise AuthError from e
             user_data = user_resp.json()
 
-            emails_resp = await client.get(f"{self.API_BASE_URL}/user/emails", headers=headers)
-            emails_resp.raise_for_status()
+            emails_resp = await self._request_with_token_refresh(
+                client,
+                "GET",
+                f"{self.API_BASE_URL}/user/emails",
+                access_token=access_token
+            )
+            try:
+                emails_resp.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise AuthError from e
             for item in emails_resp.json():
                 if item.get("primary") and item.get("verified"):
                     email = item["email"]

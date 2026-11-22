@@ -23,7 +23,7 @@ from neurorulegen.authentication_authorization.services import (
     UserAlreadyExistsError,
     NoPasswordError, HCaptchaService, CaptchaService, MockEmailService, EmailService, BrevoEmailService,
     TOTPService,
-    GitHubOAuthService,
+    GitHubOAuthService, GitHubRefreshTokenError,
 )
 from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import get_db_session
@@ -55,13 +55,15 @@ def get_captcha_service() -> "CaptchaService":
 def get_email_service() -> "EmailService":
     return BrevoEmailService()
 
-def get_github_oauth_service() -> GitHubOAuthService:
+def get_github_oauth_service(
+    repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
+) -> GitHubOAuthService:
     settings = get_settings()
     return GitHubOAuthService(
         client_id=settings.github_client_id,
         client_secret=settings.github_client_secret,
         redirect_uri=settings.github_redirect_uri,
-        app_slug=settings.github_app_slug,
+        auth_repository=repository
     )
 
 async def get_current_user(
@@ -81,7 +83,12 @@ async def get_current_user(
 @router.get("/totp/verify")
 def account_pages(request: Request):
     if request.session.get("user_id"):
-        return RedirectResponse("/profile", status_code=303)
+        notice = request.query_params.get("notice", "")
+        notice_type = request.query_params.get("notice_type", "info")
+        url = "/profile"
+        if notice or notice_type:
+            url = f"/profile?notice={quote_plus(notice)}&notice_type={quote_plus(notice_type)}"
+        return RedirectResponse(url, status_code=303)
     pages = {
         "/login": ("login", "Sign in"),
         "/register": ("register", "Register"),
@@ -231,7 +238,7 @@ async def github_callback(  # noqa: C901, PLR0912
 
     try:
         tokens = await oauth_service.exchange_code_for_tokens(code, code_verifier)
-    except Exception as e:
+    except AuthError as e:
         return RedirectResponse(
             f"/login?notice={quote_plus('Failed to exchange code with GitHub.')}&notice_type=danger",
             status_code=303,
@@ -248,7 +255,12 @@ async def github_callback(  # noqa: C901, PLR0912
 
     try:
         profile = await oauth_service.get_user_profile(access_token)
-    except Exception:
+    except GitHubRefreshTokenError:
+        return RedirectResponse(
+            f"/profile?notice={quote_plus('GitHub login expired. Log out from NeuroRuleGen and log in via GitHub again.')}&notice_type=danger",
+            status_code=303,
+        )
+    except AuthError as e:
         return RedirectResponse(
             f"/login?notice={quote_plus('Failed to fetch profile from GitHub.')}&notice_type=danger",
             status_code=303,
