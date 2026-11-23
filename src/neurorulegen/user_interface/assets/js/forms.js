@@ -1,18 +1,71 @@
+import { Options, ZxcvbnFactory } from '@zxcvbn-ts/core'
+import * as zxcvbnCommonPackage from '@zxcvbn-ts/language-common'
+import * as zxcvbnEnPackage from '@zxcvbn-ts/language-en'
+
+const options = new Options({
+  translations: zxcvbnEnPackage.translations,
+  graphs: zxcvbnCommonPackage.adjacencyGraphs,
+  dictionary: {
+    ...zxcvbnCommonPackage.dictionary,
+    ...zxcvbnEnPackage.dictionary,
+  },
+  useLevenshteinDistance: true,
+});
+const zxcvbnMatcher = new ZxcvbnFactory(options);
+
 const password = document.getElementById('password');
 const confirmation = document.getElementById('password-confirmation');
+const helpText = document.getElementById('password-help');
+const defaultHelpText =
+  helpText?.textContent ||
+  'Use at least 8 characters, with uppercase, lowercase, a number and a special character.';
+
 function validatePassword() {
-  if (!password || !confirmation) return;
-  confirmation.setCustomValidity(
-    password.value === confirmation.value ? '' : 'Passwords must match.',
-  );
+  if (!password) return;
+
+  if (confirmation) {
+    confirmation.setCustomValidity(
+      password.value === confirmation.value ? '' : 'Passwords must match.',
+    );
+  }
+
   const strength = document.getElementById('password-strength');
-  strength.value = [
-    password.value.length >= 8,
-    /[a-z]/.test(password.value),
-    /[A-Z]/.test(password.value),
-    /[0-9]/.test(password.value),
-    /[^A-Za-z0-9]/.test(password.value),
-  ].filter(Boolean).length;
+  if (!password.value) {
+    if (strength) strength.value = 0;
+    if (helpText) helpText.textContent = defaultHelpText;
+    password.setCustomValidity('');
+    return;
+  }
+
+  const hasLength = password.value.length >= 8;
+  const hasLower = /[a-z]/.test(password.value);
+  const hasUpper = /[A-Z]/.test(password.value);
+  const hasDigit = /[0-9]/.test(password.value);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password.value);
+
+  const policyPassed = hasLength && hasLower && hasUpper && hasDigit && hasSpecial;
+
+  // Use zxcvbn to evaluate password strength (score 0-4) and detect common/weak patterns
+  const result = zxcvbnMatcher.check(password.value);
+  if (strength) {
+    strength.value = policyPassed ? Math.max(1, result.score + 1) : Math.min(2, result.score);
+  }
+
+  if (helpText) {
+    if (result.score <= 1) {
+      helpText.textContent = 'Password is weak or commonly used. Choose a stronger password.';
+    } else {
+      helpText.textContent = defaultHelpText;
+    }
+  }
+
+  if (!policyPassed) {
+    password.setCustomValidity('Password must meet complexity requirements.');
+  } else if (result.score === 0) {
+    password.setCustomValidity('Password is too common or weak.');
+  } else {
+    password.setCustomValidity('');
+  }
 }
 password?.addEventListener('input', validatePassword);
 confirmation?.addEventListener('input', validatePassword);

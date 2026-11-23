@@ -37,9 +37,9 @@
           <dd class="col-12 col-md-8 text-break">repository-files, python-quality</dd>
         {% endif %}
       </dl>
-      <label class="form-label"
-        >{{ 'Initial instruction' if generation else 'System prompt snapshot / additional instruction' }}
-      </label>
+      <p>
+        {{ 'Initial instruction' if generation else 'System prompt snapshot / additional instruction' }}
+      </p>
       <pre class="p-3 border rounded bg-body-tertiary text-break overflow-auto mb-0">
 {{ instruction }}</pre>
     </div>

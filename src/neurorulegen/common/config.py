@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
@@ -9,6 +11,25 @@ class Settings(BaseSettings):
     postgres_db: str = "neurorulegen"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
+    secret_key: str
+    password_pepper: str
+    cookies_secure: bool = False
+    hcaptcha_sitekey: str
+    hcaptcha_secret: str
+    brevo_api_key: str
+    brevo_sender_name: str
+    brevo_sender_email: str
+    activation_token_expiration_minutes: int
+    password_reset_token_expiration_minutes: int
+    email_jwt_secret: str
+    base_url: str
+    fernet_key: str
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_redirect_uri: str = ""
+    max_login_attempts_per_ip: int
+    max_login_attempts_per_email: int
+    max_login_attempts_time_window_minutes: int
 
     @property
     def database_url(self) -> URL:
@@ -20,3 +41,7 @@ class Settings(BaseSettings):
             port=self.postgres_port,
             database=self.postgres_db,
         )
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

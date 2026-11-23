@@ -21,12 +21,12 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from neurorulegen.common import models  # noqa: F401 — register ORM tables
-from neurorulegen.common.config import Settings
+from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import Base
 
 config.set_main_option(
     "sqlalchemy.url",
-    Settings().database_url.render_as_string(hide_password=False).replace("%", "%%"),
+    get_settings().database_url.render_as_string(hide_password=False).replace("%", "%%"),
 )
 target_metadata = Base.metadata
 

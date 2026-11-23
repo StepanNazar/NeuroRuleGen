@@ -1,5 +1,6 @@
 """Jinja rendering and Vite's documented backend manifest integration."""
 
+import contextlib
 import json
 import os
 from functools import cache
@@ -36,7 +37,7 @@ def vite_assets(entry: str, client: bool = False) -> Markup:
         )
         return Markup(
             prefix + f'<script type="module" src="{origin}/{escape(entry)}"></script>'
-        )  # noqa: S704 -- escaped asset URL
+        )
     # example of manifest structure here: https://vite.dev/guide/backend-integration
     manifest = _load_manifest()
     styles = []
@@ -60,7 +61,7 @@ def vite_assets(entry: str, client: bool = False) -> Markup:
     return Markup(
         tags
         + f'<script type="module" src="/static/dist/{escape(manifest[entry]["file"])}"></script>'
-    )  # noqa: S704 -- escaped generated paths
+    )
 
 
 templates.env.globals["vite_assets"] = vite_assets
@@ -85,9 +86,9 @@ def pagination(total_items: int, page: int = 1, page_size: int = 5) -> dict:
     previous = 0
     for number in sorted(visible):
         # if only one page is skipped - put it back
-        if number - previous == 2:
+        if number - previous == 2:  # noqa: PLR2004
             pages.append(previous + 1)
-        elif number - previous > 2:
+        elif number - previous > 2:  # noqa: PLR2004
             pages.append(None)
         pages.append(number)
         previous = number
@@ -106,10 +107,8 @@ def pagination_context(
     size_key = (
         "page_size" if key == "page" else f"{key.removesuffix('_page')}_page_size"
     )
-    try:
+    with contextlib.suppress(ValueError):
         page_size = int(request.query_params.get(size_key, page_size))
-    except ValueError:
-        pass
     try:
         page = int(request.query_params.get(key, 1))
     except ValueError:
@@ -127,7 +126,7 @@ def pagination_context(
         **pager,
         "page_key": key,
         "size_key": size_key,
-        "params": [ # needed for page size selector to preserve params
+        "params": [  # needed for page size selector to preserve params
             (name, value)
             for name, value in request.query_params.multi_items()
             if name not in {key, size_key}

@@ -15,7 +15,7 @@ index 1111111..2222222 100644
 +++ b/src/service.py
 @@ -1,4 +1,4 @@
  import subprocess
- 
+
  def run_task(command):
 -    subprocess.run(command)
 +    subprocess.run(command, shell=True)
@@ -189,7 +189,7 @@ async def fork(request: Request, project_id: int, run_id: int):
 
 
 @router.get("/projects/{project_id}/usage")
-def usage(
+def usage(  # noqa: PLR0913 -- independent GET filters
     request: Request,
     project_id: int,
     *,
@@ -198,7 +198,7 @@ def usage(
     start: str = "",
     end: str = "",
     group: str = "",
-):  # noqa: PLR0913 -- independent GET filters
+):
     # Per-model/per-user daily rows make filters composable without summing models.
     records = [
         {
