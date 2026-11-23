@@ -14,7 +14,7 @@ import pyotp
 import segno
 from brevo import AsyncBrevo, SendTransacEmailRequestSender, SendTransacEmailRequestToItem
 
-from neurorulegen.authentication_authorization.models import User
+from neurorulegen.authentication_authorization.models import User, FailedLoginAttempt
 from neurorulegen.authentication_authorization.repository import AuthRepository
 from neurorulegen.common.config import get_settings
 
@@ -162,6 +162,52 @@ class AuthService:
         self.repository.update_user_password(user, new_hashed_password)
         await self.repository.commit()
         return user
+
+    async def get_failed_login_accounts(
+        self,
+        email_filter: str | None = None,
+        minimum_attempts: int = 0,
+        days: int = 7,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> tuple[list[dict], int]:
+        return await self.repository.get_failed_login_accounts_stats(
+            email_filter=email_filter if email_filter else None,
+            minimum_attempts=minimum_attempts,
+            days=days,
+            limit=limit,
+            offset=offset,
+        )
+
+    async def get_failed_login_details(self, email: str, days: int = 7) -> list[FailedLoginAttempt]:
+        return await self.repository.get_failed_login_attempts_for_email(email, days=days)
+
+    async def get_blocked_accounts(
+        self,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> tuple[list[dict], int]:
+        users, total_count = await self.repository.get_blocked_users(limit=limit, offset=offset)
+        items = [
+            {
+                "id": u.id,
+                "email": u.email,
+                "blocked": u.login_blocked,
+            }
+            for u in users
+        ]
+        return items, total_count
+
+    async def set_user_blocked_status(self, user_id: int, blocked: bool) -> dict | None:
+        user = await self.repository.set_user_blocked(user_id, blocked)
+        await self.repository.commit()
+        if not user:
+            return None
+        return {
+            "id": user.id,
+            "email": user.email,
+            "blocked": user.login_blocked,
+        }
 
     async def generate_activation_link(self, user: User) -> str:
         now = datetime.now(timezone.utc)

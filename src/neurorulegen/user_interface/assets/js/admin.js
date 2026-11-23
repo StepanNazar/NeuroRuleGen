@@ -17,8 +17,27 @@ document.querySelectorAll('[data-block-url]').forEach((button) =>
     });
   }),
 );
-document.getElementById('attempt-details')?.addEventListener('show.bs.modal', (event) => {
+document.getElementById('attempt-details')?.addEventListener('show.bs.modal', async (event) => {
   const button = event.relatedTarget;
+  const email = button.dataset.email;
+  const count = button.dataset.count;
+
   document.getElementById('attempt-summary').textContent =
-    `${button.dataset.email} · ${button.dataset.count} failed attempts over the last 7 days`;
+    `${email} · ${count} failed attempts over the last 7 days`;
+
+  const logsEl = document.getElementById('attempt-logs');
+  if (logsEl) {
+    logsEl.textContent = 'Loading...';
+    const attempts = await request(`/api/admin/failed-attempts?email=${encodeURIComponent(email)}`);
+    if (!attempts || attempts.length === 0) {
+      logsEl.textContent = 'No detailed logs found.';
+      return;
+    }
+    logsEl.textContent = attempts
+      .map(
+        (a) =>
+          `${a.attempted_at} · ${a.ip_address}\n${a.user_agent || 'Unknown user agent'}`
+      )
+      .join('\n\n');
+  }
 });

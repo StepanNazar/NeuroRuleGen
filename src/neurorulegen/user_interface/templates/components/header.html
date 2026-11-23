@@ -20,7 +20,9 @@
     <div class="collapse navbar-collapse" id="main-navigation">
       <div class="navbar-nav ms-auto gap-md-3">
         {% if is_admin %}
-          <a class="nav-link" href="/logout">Sign out</a>
+          <form action="/logout" method="post" class="d-inline my-auto">
+            <button class="nav-link btn btn-link p-0 text-start" type="submit">Sign out</button>
+          </form>
         {% elif request.url.path not in ['/login','/register','/password-recovery','/totp/verify','/totp/setup','/activate'] %}
           <a class="nav-link" href="/projects">Home: my projects</a>
           <a class="nav-link" href="/profile">My profile</a>

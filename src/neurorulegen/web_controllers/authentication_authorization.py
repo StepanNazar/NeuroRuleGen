@@ -201,12 +201,13 @@ async def login(
     if user.totp_enabled:
         request.session["totp_user_id"] = user.id
         target = (
-            "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/projects"
+            "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/profile"
         )
         return RedirectResponse(f"/totp/verify?next={quote_plus(target)}", status_code=303)
 
     request.session["user_id"] = user.id
     if user.system_role == SystemRole.ADMINISTRATOR:
+        request.session["admin"] = True
         return RedirectResponse("/admin", status_code=303)
     return RedirectResponse("/profile", status_code=303)
 
@@ -371,7 +372,7 @@ async def github_callback(  # noqa: C901, PLR0912
     if user.totp_enabled:
         request.session["totp_user_id"] = user.id
         target = (
-            "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/projects"
+            "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/profile"
         )
         return RedirectResponse(f"/totp/verify?next={quote_plus(target)}", status_code=303)
 
@@ -624,7 +625,7 @@ async def verify_totp(
     auth_repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
     totp_service: TOTPService = Depends(get_totp_service),  # noqa: B008
 ):
-    target = request.query_params.get("next", "/projects")
+    target = request.query_params.get("next", "/profile")
     user_id = request.session.get("totp_user_id") or request.session.get("user_id")
     if not user_id:
         return RedirectResponse("/login", status_code=303)
@@ -641,10 +642,12 @@ async def verify_totp(
 
     request.session.pop("totp_user_id", None)
     request.session["user_id"] = user.id
+    if user.system_role == SystemRole.ADMINISTRATOR:
+        request.session["admin"] = True
 
     if target == "/admin" and user.system_role == SystemRole.ADMINISTRATOR:
         return RedirectResponse("/admin", status_code=303)
-    return RedirectResponse(target if target.startswith("/") else "/projects", status_code=303)
+    return RedirectResponse(target if target.startswith("/") else "/profile", status_code=303)
 
 
 @router.post("/totp/setup")
@@ -687,23 +690,58 @@ def logout(request: Request):
 
 
 @router.get("/admin")
-def admin_page(request: Request, email: str = "", minimum: int = 0):
-    if not request.session.get("admin"):
+async def admin_page(
+    request: Request,
+    email: str = "",
+    minimum: int = 0,
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+):
+    if not current_user or current_user.system_role != SystemRole.ADMINISTRATOR:
         return RedirectResponse("/login", status_code=303)
 
-    p = pagination_context(request, 0)
-    bp = pagination_context(request, 0, "blocked_page")
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except ValueError:
+        page = 1
+    try:
+        page_size = max(1, min(int(request.query_params.get("page_size", 5)), 100))
+    except ValueError:
+        page_size = 5
+    offset = (page - 1) * page_size
+
+    try:
+        blocked_page = max(1, int(request.query_params.get("blocked_page", 1)))
+    except ValueError:
+        blocked_page = 1
+    try:
+        blocked_page_size = max(1, min(int(request.query_params.get("blocked_page_size", 5)), 100))
+    except ValueError:
+        blocked_page_size = 5
+    blocked_offset = (blocked_page - 1) * blocked_page_size
+
+    clean_email = email.strip()
+    paged_accounts, total_accounts = await auth_service.get_failed_login_accounts(
+        email_filter=clean_email if clean_email else None,
+        minimum_attempts=minimum,
+        limit=page_size,
+        offset=offset,
+    )
+    paged_blocked, total_blocked = await auth_service.get_blocked_accounts(
+        limit=blocked_page_size,
+        offset=blocked_offset,
+    )
+
+    p = pagination_context(request, total_accounts, key="page", page_size=page_size)
+    bp = pagination_context(request, total_blocked, key="blocked_page", page_size=blocked_page_size)
+
     return render(
         request,
         "pages/authentication_authorization/admin.html",
         "Account security",
         is_admin=True,
-        accounts=[],
-        blocked=[],
-        # accounts=failed[(p["page"] - 1) * p["page_size"] : p["page"] * p["page_size"]],
-        # blocked=blocked[
-        #     (bp["page"] - 1) * bp["page_size"] : bp["page"] * bp["page_size"]
-        # ],
+        accounts=paged_accounts,
+        blocked=paged_blocked,
         pager=p,
         blocked_pager=bp,
         email=email,
@@ -711,8 +749,49 @@ def admin_page(request: Request, email: str = "", minimum: int = 0):
     )
 
 
+@router.get("/api/admin/failed-attempts")
+async def get_failed_attempts_details(
+    email: str,
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+):
+    if not current_user or current_user.system_role != SystemRole.ADMINISTRATOR:
+        return {"error": "Unauthorized"}
+    attempts = await auth_service.get_failed_login_details(email.strip())
+    return [
+        {
+            "id": a.id,
+            "attempted_at": a.attempted_at.strftime("%Y-%m-%d %H:%M"),
+            "ip_address": a.ip_address,
+            "user_agent": a.user_agent,
+        }
+        for a in attempts
+    ]
+
+
 @router.post("/api/user/{account_id}/block")
+async def account_block(
+    account_id: int,
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+):
+    if not current_user or current_user.system_role != SystemRole.ADMINISTRATOR:
+        return {"error": "Unauthorized"}
+    user_data = await auth_service.set_user_blocked_status(account_id, True)
+    if not user_data:
+        return {"error": "User not found"}
+    return user_data
+
+
 @router.delete("/api/user/{account_id}/block")
-def account_block(account_id: int):
-    account = next(a for a in accounts if a["id"] == account_id)
-    return account
+async def account_unblock(
+    account_id: int,
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+):
+    if not current_user or current_user.system_role != SystemRole.ADMINISTRATOR:
+        return {"error": "Unauthorized"}
+    user_data = await auth_service.set_user_blocked_status(account_id, False)
+    if not user_data:
+        return {"error": "User not found"}
+    return user_data
