@@ -7,6 +7,10 @@ from datetime import date
 from typing import Any
 import uuid
 
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+from neurorulegen.common.config import get_settings
+
 from neurorulegen.ai_configuration.models import AIModel
 from neurorulegen.ai_configuration.repository import (
     AIConfigurationRepository,
@@ -27,6 +31,169 @@ from neurorulegen.common.enums import RunStatus
 from neurorulegen.project_management.repository import (
     ProjectRepository,
 )
+
+
+def _message_field(message: Any, field: str, default: Any = None) -> Any:
+    if isinstance(message, dict):
+        return message.get(field, default)
+    return getattr(message, field, default)
+
+
+def _safe_json(value: Any) -> str:
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _content_blocks(content: Any) -> list[dict[str, Any]]:
+    if isinstance(content, str):
+        return [{"type": "text", "text": content}] if content else []
+    if not isinstance(content, list):
+        if content is None:
+            return []
+        return [{"type": "text", "text": str(content)}]
+
+    blocks: list[dict[str, Any]] = []
+    for block in content:
+        if isinstance(block, str):
+            blocks.append({"type": "text", "text": block})
+        elif isinstance(block, dict):
+            blocks.append(block)
+        else:
+            block_type = getattr(block, "type", "non_standard")
+            blocks.append(
+                {
+                    "type": str(block_type),
+                    "data": getattr(block, "data", None),
+                    "text": getattr(block, "text", None),
+                }
+            )
+    return blocks
+
+
+def _normalize_tool_calls(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    for call in value:
+        if isinstance(call, dict):
+            arguments = call.get(
+                "args",
+                call.get(
+                    "arguments",
+                    call.get("function", {}).get("arguments", {}),
+                ),
+            )
+            normalized.append({
+                "name": call.get("name") or call.get("function", {}).get("name") or "unknown",
+                "arguments": _json_safe(arguments),
+                "id": call.get("id"),
+            })
+        else:
+            normalized.append({
+                "name": getattr(call, "name", "unknown"),
+                "arguments": _json_safe(
+                    getattr(call, "args", getattr(call, "arguments", {}))
+                ),
+                "id": _json_safe(getattr(call, "id", None)),
+            })
+    return normalized
+
+
+def _extract_message(message: Any) -> dict[str, Any]:
+    message_type = _message_field(message, "type", "")
+    role_map = {"human": "User", "ai": "AI Assistant", "tool": "Tool Result", "system": "System"}
+    role = role_map.get(str(message_type), str(message_type).title() or "Message")
+
+    content = _message_field(message, "content", "")
+    blocks = _json_safe(_content_blocks(content))
+
+    tool_calls = _normalize_tool_calls(_message_field(message, "tool_calls", []))
+    invalid_tool_calls = _normalize_tool_calls(
+        _message_field(message, "invalid_tool_calls", [])
+    )
+    for block in blocks:
+        block_type = block.get("type")
+        if block_type in {"tool_call", "server_tool_call"}:
+            call = {
+                "name": block.get("name") or "unknown",
+                "arguments": _json_safe(
+                    block.get("args", block.get("arguments", {}))
+                ),
+                "id": _json_safe(block.get("id")),
+            }
+            if call not in tool_calls:
+                tool_calls.append(call)
+        elif block_type == "invalid_tool_call":
+            invalid_tool_calls.append({
+                "name": block.get("name") or "unknown",
+                "arguments": _json_safe(
+                    block.get("args", block.get("arguments", {}))
+                ),
+                "id": _json_safe(block.get("id")),
+            })
+
+    additional_kwargs = _message_field(message, "additional_kwargs", {}) or {}
+    if isinstance(additional_kwargs, dict) and additional_kwargs.get("function_call"):
+        function_call = additional_kwargs["function_call"]
+        call = {
+            "name": function_call.get("name") or "unknown",
+            "arguments": _json_safe(function_call.get("arguments", {})),
+            "id": _json_safe(additional_kwargs.get("tool_call_id")),
+        }
+        if call not in tool_calls:
+            tool_calls.append(call)
+
+    usage = _json_safe(_message_field(message, "usage_metadata", {}) or {})
+    if not isinstance(usage, dict):
+        usage = {}
+
+    response_metadata = _json_safe(
+        _message_field(message, "response_metadata", {}) or {}
+    )
+    if not isinstance(response_metadata, dict):
+        response_metadata = {}
+
+    return {
+        "role": role,
+        "message_id": _json_safe(_message_field(message, "id")),
+        "name": _json_safe(_message_field(message, "name")),
+        "tool_call_id": _json_safe(_message_field(message, "tool_call_id")),
+        "status": _json_safe(_message_field(message, "status")),
+        "blocks": blocks,
+        "tool_calls": tool_calls,
+        "invalid_tool_calls": invalid_tool_calls,
+        "usage": usage,
+        "response_metadata": response_metadata,
+    }
+
+
+def _message_identity(message: dict[str, Any]) -> str:
+    return _safe_json(message)
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(item) for item in value]
+    if hasattr(value, "model_dump"):
+        return _json_safe(value.model_dump())
+    if hasattr(value, "dict"):
+        return _json_safe(value.dict())
+    if hasattr(value, "content"):
+        return {
+            "type": _message_field(value, "type", value.__class__.__name__),
+            "content": _json_safe(_message_field(value, "content", "")),
+            "name": _json_safe(_message_field(value, "name")),
+            "id": _json_safe(_message_field(value, "id")),
+            "tool_call_id": _json_safe(_message_field(value, "tool_call_id")),
+            "status": _json_safe(_message_field(value, "status")),
+        }
+    return str(value)
 
 
 class AnalysisError(Exception):
@@ -151,6 +318,100 @@ class AnalysisManagementService:
             [server.name for server in mcps if server.enabled],
             [skill.name for skill in skills if skill.enabled],
         )
+
+    async def get_checkpoint_timeline(
+        self,
+        thread_id: str,
+    ) -> list[dict[str, Any]]:
+        settings = get_settings()
+        checkpoints: list[dict[str, Any]] = []
+        async with AsyncPostgresSaver.from_conn_string(settings.postgres_dsn) as saver:
+            await saver.setup()
+            config = {"configurable": {"thread_id": thread_id}}
+            async for checkpoint_tuple in saver.alist(config, limit=100):
+                checkpoint = checkpoint_tuple.checkpoint
+                metadata = checkpoint_tuple.metadata or {}
+                channel_values = checkpoint.get("channel_values", {}) or {}
+                messages = channel_values.get("messages", [])
+                snapshot_messages = (
+                    [_extract_message(message) for message in messages]
+                    if isinstance(messages, list)
+                    else []
+                )
+                snapshot_ids = [
+                    _message_identity(message) for message in snapshot_messages
+                ]
+
+                pending_writes: list[dict[str, Any]] = []
+                for write_index, pending_write in enumerate(
+                    checkpoint_tuple.pending_writes or [], start=1
+                ):
+                    if isinstance(pending_write, (tuple, list)) and len(pending_write) >= 3:
+                        task_id, channel, value = pending_write[:3]
+                    else:
+                        task_id, channel, value = None, "unknown", pending_write
+                    value = _json_safe(value)
+                    pending_writes.append({
+                        "index": write_index,
+                        "task_id": str(task_id) if task_id is not None else None,
+                        "channel": str(channel),
+                        "value": value,
+                    })
+
+                checkpoints.append({
+                    "checkpoint_id": checkpoint_tuple.config["configurable"]["checkpoint_id"],
+                    "timestamp": checkpoint.get("ts", ""),
+                    "step": metadata.get("step"),
+                    "source": metadata.get("source", ""),
+                    "run_id": metadata.get("run_id"),
+                    "parents": metadata.get("parents", {}) or {},
+                    "snapshot_messages": snapshot_messages,
+                    "snapshot_ids": snapshot_ids,
+                    "pending_writes": pending_writes,
+                    "updated_channels": sorted(checkpoint.get("updated_channels", []) or []),
+                    "channel_count": len(checkpoint.get("channel_versions", {}) or {}),
+                })
+
+        checkpoints.reverse()
+        previous_message_ids: list[str] = []
+        formatted_checkpoints: list[dict[str, Any]] = []
+        for item in checkpoints:
+            snapshot_ids = item["snapshot_ids"]
+            common_prefix = 0
+            for old_id, new_id in zip(previous_message_ids, snapshot_ids, strict=False):
+                if old_id != new_id:
+                    break
+                common_prefix += 1
+
+            new_messages = item["snapshot_messages"][common_prefix:]
+            previous_message_ids = snapshot_ids
+            formatted_checkpoints.append({
+                "id": len(formatted_checkpoints) + 1,
+                "checkpoint_id": item["checkpoint_id"],
+                "title": f"Checkpoint {len(formatted_checkpoints) + 1}",
+                "description": (
+                    f"{item['source']} step"
+                    if item["source"]
+                    else "LangGraph checkpoint"
+                ),
+                "data": "\n".join(
+                    [
+                        f"Checkpoint ID: {item['checkpoint_id']}",
+                        f"Timestamp: {item['timestamp'] or '—'}",
+                        f"Step: {item['step'] if item['step'] is not None else '—'}",
+                        f"Run ID: {item['run_id'] or '—'}",
+                        f"Updated channels: {', '.join(item['updated_channels']) or '—'}",
+                        f"Channel count: {item['channel_count']}",
+                        f"Pending writes: {len(item['pending_writes'])}",
+                        f"Parents: {_safe_json(item['parents'])}",
+                    ]
+                ),
+                "messages": new_messages,
+                "pending_writes": item["pending_writes"],
+                "branches": [],
+            })
+
+        return formatted_checkpoints
 
     async def request_pr_analysis(
         self,

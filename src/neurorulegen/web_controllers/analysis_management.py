@@ -226,23 +226,33 @@ async def run_log(
             "instruction": analysis.continuation_instruction or analysis.system_prompt,
             "original": analysis.source_analysis_id,
         }
-        events = [
-            {
+        events = await analysis_service.get_checkpoint_timeline(
+            analysis.langgraph_thread_id
+        )
+        branch_ids = [fork.id for fork in analysis.forks]
+        for fork in analysis.forks:
+            for event in events:
+                if event["checkpoint_id"] == fork.source_checkpoint_id:
+                    event["branches"].append(fork.id)
+                    break
+        if not events:
+            events = [{
                 "id": 1,
+                "checkpoint_id": "",
                 "title": "Analysis Started",
                 "description": f"Target PR #{analysis.pull_request.github_pr_number if analysis.pull_request else ''}",
                 "data": f"Thread ID: {analysis.langgraph_thread_id}",
-                "branches": [f.id for f in analysis.forks] if hasattr(analysis, "forks") else [],
-            }
-        ]
+                "branches": branch_ids,
+            }]
         if analysis.status == RunStatus.COMPLETED:
-            events.append({
-                "id": 2,
-                "title": "Completed Findings",
-                "description": f"Found {len(findings_list)} issues",
-                "data": "\n".join([f"- {f.file_path}:{f.start_line}: {f.description}" for f in findings_list]),
-                "branches": [],
-            })
+            events[-1]["description"] = f"Completed · found {len(findings_list)} issues"
+            if findings_list:
+                events[-1]["data"] += "\n\nFindings:\n" + "\n".join(
+                    [
+                        f"- {finding.file_path}:{finding.start_line}: {finding.description}"
+                        for finding in findings_list
+                    ]
+                )
     else:
         run_dict = {
             "id": run_id,
@@ -284,6 +294,7 @@ async def fork(
     data = await request.form()
     generation = data.get("generation") == "1"
     event_id = str(data.get("event", "1"))
+    checkpoint_id = str(data.get("checkpoint_id", "") or event_id)
     instruction = str(data.get("instruction", ""))
 
     if generation:
@@ -296,7 +307,7 @@ async def fork(
         project_id=project_id,
         user_id=current_user.id,
         source_analysis_id=run_id,
-        checkpoint_id=event_id,
+        checkpoint_id=checkpoint_id,
         instruction=instruction,
     )
     return RedirectResponse(
