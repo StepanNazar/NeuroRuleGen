@@ -26,7 +26,7 @@ logger = logging.getLogger("ai_analysis_worker")
 
 
 class AnalysisWorker:
-    def __init__(self, stop_event: multiprocessing.Event) -> None:
+    def __init__(self, stop_event) -> None:
         self.stop_event = stop_event
         self.settings = get_settings()
 
@@ -156,7 +156,7 @@ class AnalysisWorker:
                     logger.error(f"Failed to persist finding in DB: {f_err}")
 
             agent, token_handler, mcp_client = await build_pr_analysis_agent(
-                model_name=task.model.identifier,
+                model_name=task.model.model_identifier,
                 provider_name=task.model.provider.name,
                 api_key=api_key,
                 provider_config=prov_config,
@@ -245,7 +245,7 @@ class AnalysisWorker:
             logger.error(f"Failed to record final status for task #{task.id}: {fin_err}")
 
 
-def worker_process_main(stop_event: multiprocessing.Event) -> None:
+def worker_process_main(stop_event) -> None:
     """Entry point for the separate OS worker process."""
     worker = AnalysisWorker(stop_event=stop_event)
     asyncio.run(worker.run())
