@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from neurorulegen.ai_configuration.models import AIModel
 from neurorulegen.analysis_management.models import (
     AIAnalysis,
     AIFinding,
@@ -128,6 +129,10 @@ class AIAnalysisRepository(ABC):
     ) -> list[dict[str, Any]]:
         pass
 
+    @abstractmethod
+    async def commit(self) -> None:
+        pass
+
 
     @abstractmethod
     async def recover_stale_running(self) -> int:
@@ -196,6 +201,9 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def commit(self) -> None:
+        await self.session.commit()
+
     async def get_by_id(self, analysis_id: int) -> AIAnalysis | None:
         stmt = (
             select(AIAnalysis)
@@ -214,9 +222,10 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
             select(AIAnalysis)
             .options(
                 selectinload(AIAnalysis.pull_request),
-                selectinload(AIAnalysis.model),
+                selectinload(AIAnalysis.model).selectinload(AIModel.provider),
                 selectinload(AIAnalysis.started_by_user),
                 selectinload(AIAnalysis.findings),
+                selectinload(AIAnalysis.forks),
             )
             .where(AIAnalysis.id == analysis_id)
         )

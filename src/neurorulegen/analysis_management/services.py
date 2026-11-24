@@ -119,6 +119,39 @@ class AnalysisManagementService:
                 })
         return models_out
 
+    async def list_project_analyses(
+        self,
+        project_id: int,
+        user_id: int,
+        offset: int = 0,
+        limit: int = 10,
+    ) -> Sequence[AIAnalysis]:
+        await self._verify_project_member(project_id, user_id)
+        return await self.analysis_repo.list_by_project(
+            project_id=project_id,
+            offset=offset,
+            limit=limit,
+        )
+
+    async def count_project_analyses(
+        self,
+        project_id: int,
+        user_id: int,
+    ) -> int:
+        await self._verify_project_member(project_id, user_id)
+        return await self.analysis_repo.count_by_project(project_id)
+
+    async def get_analysis_config_snapshot(
+        self,
+        project_id: int,
+    ) -> tuple[list[str], list[str]]:
+        mcps = await self.ai_config_repo.get_mcp_servers(project_id)
+        skills = await self.ai_config_repo.get_agent_skills(project_id)
+        return (
+            [server.name for server in mcps if server.enabled],
+            [skill.name for skill in skills if skill.enabled],
+        )
+
     async def request_pr_analysis(
         self,
         project_id: int,
@@ -172,6 +205,7 @@ class AnalysisManagementService:
             status=RunStatus.PENDING,
             continuation_instruction=additional_instruction or None,
         )
+        await self.analysis_repo.commit()
         return analysis
 
     async def create_fork(
@@ -215,6 +249,7 @@ class AnalysisManagementService:
             continuation_instruction=instruction,
             diff=source.diff,
         )
+        await self.analysis_repo.commit()
         return fork_analysis, config_has_drifted
 
     async def get_analysis_result(

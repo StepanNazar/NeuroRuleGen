@@ -18,8 +18,8 @@
       >{{ run.status|default('Completed') }}
     </span>
     <span class="text-secondary"
-      >Analysis #{{ run_id }} · {{ run.provider|default('OpenAI') }} /
-      {{ run.model|default('gpt-5') }}
+      >Analysis #{{ run_id }} · {{ run.provider|default('', true) or '—' }} /
+      {{ run.model|default('', true) or '—' }}
     </span>
   </p>
   <div id="pr-diff" data-generation-url="/projects/{{ project.id }}/generations/new"></div>

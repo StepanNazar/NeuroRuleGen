@@ -35,7 +35,6 @@ from neurorulegen.web_controllers.authentication_authorization import (
 from neurorulegen.web_controllers.project_management import (
     get_project_service,
     project_context,
-    runs,
 )
 
 router = APIRouter()
@@ -207,6 +206,9 @@ async def run_log(
         analysis, findings_list = await analysis_service.get_analysis_result(
             project_id=project_id, user_id=current_user.id, analysis_id=run_id
         )
+        mcp_names, skill_names = await analysis_service.get_analysis_config_snapshot(
+            project_id
+        )
         run_dict = {
             "id": analysis.id,
             "title": f"Analysis #{analysis.id}",
@@ -217,6 +219,10 @@ async def run_log(
             "input_tokens": analysis.input_tokens,
             "output_tokens": analysis.output_tokens,
             "total_tokens": analysis.input_tokens + analysis.output_tokens,
+            "base_commit": analysis.base_commit_hash,
+            "head_commit": analysis.head_commit_hash,
+            "mcp_names": mcp_names,
+            "skill_names": skill_names,
             "instruction": analysis.continuation_instruction or analysis.system_prompt,
             "original": analysis.source_analysis_id,
         }

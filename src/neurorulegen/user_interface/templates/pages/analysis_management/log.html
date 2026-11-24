@@ -15,12 +15,16 @@
         <dd class="col-12 col-md-8 text-break">{{ run.status|default('Completed') }}</dd>
         <dt class="col-12 col-md-4 text-body-secondary">Provider / model</dt>
         <dd class="col-12 col-md-8 text-break">
-          {{ run.provider|default('OpenAI') }} / {{ run.model|default('gpt-5') }}
+          {{ run.provider|default('', true) or '—' }} / {{ run.model|default('', true) or '—' }}
         </dd>
         <dt class="col-12 col-md-4 text-body-secondary">Author</dt>
-        <dd class="col-12 col-md-8 text-break">developer@example.com</dd>
+        <dd class="col-12 col-md-8 text-break">{{ run.author|default('') }}</dd>
         <dt class="col-12 col-md-4 text-body-secondary">Input / output / total tokens</dt>
-        <dd class="col-12 col-md-8 text-break">4,200 / 1,800 / 6,000</dd>
+        <dd class="col-12 col-md-8 text-break">
+          {{ '{:,}'.format(run.input_tokens|default(0)) }} /
+          {{ '{:,}'.format(run.output_tokens|default(0)) }} /
+          {{ '{:,}'.format(run.total_tokens|default(0)) }}
+        </dd>
         {% if generation %}
           <dt class="col-12 col-md-4 text-body-secondary">Mode / iteration limit</dt>
           <dd class="col-12 col-md-8 text-break">
@@ -31,10 +35,14 @@
         {% else %}
           <dt class="col-12 col-md-4 text-body-secondary">Base / head commit SHA</dt>
           <dd class="col-12 col-md-8 text-break">
-            <code>7ac1a12 / b2f8c91</code>
+            <code>{{ run.base_commit|default('', true) or '—' }} / {{ run.head_commit|default('', true) or '—' }}</code>
           </dd>
           <dt class="col-12 col-md-4 text-body-secondary">MCP / Agent Skills snapshot</dt>
-          <dd class="col-12 col-md-8 text-break">repository-files, python-quality</dd>
+          <dd class="col-12 col-md-8 text-break">
+            {% set mcp_names = run.mcp_names|default([]) %}
+            {% set skill_names = run.skill_names|default([]) %}
+            {{ ((mcp_names + skill_names)|join(', ')) or '—' }}
+          </dd>
         {% endif %}
       </dl>
       <p>
