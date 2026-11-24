@@ -53,6 +53,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """
     Handle validation errors by redirecting back to the previous page.
     """
+    print(f"Validation error on {request.url.path}: {exc.errors()}")
     referer = request.headers.get("referer") or "/"
     return RedirectResponse(url=referer, status_code=status.HTTP_303_SEE_OTHER)
 
