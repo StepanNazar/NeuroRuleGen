@@ -428,14 +428,14 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
         res_ai = await self.session.execute(stmt_ai)
         for row in res_ai.all():
             d, user, model, in_tok, c_read, c_write, c_write_l, out_tok = row
-            if model and model.name == model_name:
+            if model and model.model_identifier == model_name:
                 u_email = user.email if user else ""
                 if not user_email or u_email == user_email:
                     if (not start_date or d >= start_date) and (not end_date or d <= end_date):
                         records.append({
                             "date": d,
                             "user": u_email,
-                            "model": model.name,
+                            "model": model.model_identifier,
                             "metrics": [
                                 int(in_tok or 0),
                                 int(c_read or 0),
@@ -448,14 +448,14 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
         res_rg = await self.session.execute(stmt_rg)
         for row in res_rg.all():
             d, user, model, in_tok, c_read, c_write, c_write_l, out_tok = row
-            if model and model.name == model_name:
+            if model and model.model_identifier == model_name:
                 u_email = user.email if user else ""
                 if not user_email or u_email == user_email:
                     if (not start_date or d >= start_date) and (not end_date or d <= end_date):
                         records.append({
                             "date": d,
                             "user": u_email,
-                            "model": model.name,
+                            "model": model.model_identifier,
                             "metrics": [
                                 int(in_tok or 0),
                                 int(c_read or 0),

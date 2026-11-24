@@ -27,6 +27,7 @@ class ProjectRepository(ABC):
         self,
         name: str,
         github_repository_id: int,
+        github_repo_url: str | None,
         created_by_user_id: int,
         additional_system_prompt: str | None = None,
     ) -> Project:
@@ -114,12 +115,14 @@ class SQLAlchemyProjectRepository(ProjectRepository):
         self,
         name: str,
         github_repository_id: int,
+        github_repo_url: str | None,
         created_by_user_id: int,
         additional_system_prompt: str | None = None,
     ) -> Project:
         project = Project(
             name=name,
             github_repository_id=github_repository_id,
+            github_repo_url=github_repo_url,
             created_by_user_id=created_by_user_id,
             additional_system_prompt=additional_system_prompt,
         )

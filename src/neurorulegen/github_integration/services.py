@@ -56,6 +56,21 @@ class GitHubClient:
             )
         return match.group(1), match.group(2)
 
+    async def get_repository_details(
+        self,
+        repo_str: str,
+        user_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Fetch repository metadata, including its numeric ID and canonical URL."""
+        owner, repo = self.parse_repo_string(repo_str)
+        url = f"{self.API_BASE_URL}/repos/{owner}/{repo}"
+        return await self._get_json_with_fallback(
+            url=url,
+            user_id=user_id,
+            owner=owner,
+            repo=repo,
+        )
+
     async def get_pull_request(
         self,
         repo_str: str,

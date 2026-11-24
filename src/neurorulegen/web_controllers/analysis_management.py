@@ -1,6 +1,6 @@
 """Web controllers for AI analysis, fork sessions, results, and token monitoring."""
 
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import quote_plus
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -62,8 +62,14 @@ async def new_analysis(
     project_service=Depends(get_project_service),  # noqa: B008
     analysis_service: AnalysisManagementService = Depends(get_analysis_service),  # noqa: B008
 ):
-    project = await project_service.get_project_by_id(project_id, current_user.id)
-    available_models = await analysis_service.get_available_models(project_id)
+    project = await project_service.get_project_details(project_id, current_user.id)
+    available_models_by_name: dict[str, dict[str, Any]] = {}
+    for available_model in await analysis_service.get_available_models(project_id):
+        available_models_by_name.setdefault(
+            available_model["name"],
+            available_model,
+        )
+    available_models = list(available_models_by_name.values())
 
     return render(
         request,
@@ -110,7 +116,7 @@ async def result(
     project_service=Depends(get_project_service),  # noqa: B008
     analysis_service: AnalysisManagementService = Depends(get_analysis_service),  # noqa: B008
 ):
-    project = await project_service.get_project_by_id(project_id, current_user.id)
+    project = await project_service.get_project_details(project_id, current_user.id)
     analysis, findings_list = await analysis_service.get_analysis_result(
         project_id=project_id, user_id=current_user.id, analysis_id=run_id
     )
@@ -132,7 +138,7 @@ async def result(
         "status": analysis.status.value.capitalize(),
         "pr": analysis.pull_request.github_pr_number if analysis.pull_request else None,
         "provider": analysis.model.provider.name if analysis.model else "",
-        "model": analysis.model.name if analysis.model else "",
+        "model": analysis.model.model_identifier if analysis.model else "",
     }
 
     return render(
@@ -195,7 +201,7 @@ async def run_log(
     analysis_service: AnalysisManagementService = Depends(get_analysis_service),  # noqa: B008
 ):
     generation = "/generations/" in request.url.path
-    project = await project_service.get_project_by_id(project_id, current_user.id)
+    project = await project_service.get_project_details(project_id, current_user.id)
 
     if not generation:
         analysis, findings_list = await analysis_service.get_analysis_result(
@@ -206,7 +212,7 @@ async def run_log(
             "title": f"Analysis #{analysis.id}",
             "status": analysis.status.value.capitalize(),
             "provider": analysis.model.provider.name if analysis.model else "",
-            "model": analysis.model.name if analysis.model else "",
+            "model": analysis.model.model_identifier if analysis.model else "",
             "author": analysis.started_by_user.email if analysis.started_by_user else "",
             "input_tokens": analysis.input_tokens,
             "output_tokens": analysis.output_tokens,
@@ -307,18 +313,29 @@ async def usage(  # noqa: PLR0913 -- independent GET filters
     project_service=Depends(get_project_service),  # noqa: B008
     analysis_service: AnalysisManagementService = Depends(get_analysis_service),  # noqa: B008
 ):
-    project = await project_service.get_project_by_id(project_id, current_user.id)
+    project = await project_service.get_project_details(project_id, current_user.id)
     if project.created_by_user_id != current_user.id:
         raise HTTPException(
             status_code=403,
             detail="Only the Quality/Security Engineer can view token usage reports.",
         )
 
+    available_models = await analysis_service.get_available_models(project_id)
+    project_users: list[str] = []
+    if project.creator and project.creator.email:
+        project_users.append(project.creator.email)
+    for developer in project.developers:
+        if developer.user and developer.user.email:
+            project_users.append(developer.user.email)
+    project_users = list(dict.fromkeys(project_users))
+
     if not model:
         return render(
             request,
             "pages/analysis_management/usage.html",
             "Token usage",
+            models=available_models,
+            project_users=project_users,
             model="",
             user="",
             start="",
@@ -343,6 +360,8 @@ async def usage(  # noqa: PLR0913 -- independent GET filters
         request,
         "pages/analysis_management/usage.html",
         "Token usage",
+        models=available_models,
+        project_users=project_users,
         model=report["model"],
         user=report["user"],
         start=report["start"],

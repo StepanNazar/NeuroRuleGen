@@ -13,6 +13,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(Text)
     # External GitHub identifier, without a local repository table.
     github_repository_id: Mapped[int] = mapped_column(BigInteger)
+    github_repo_url: Mapped[str | None] = mapped_column(Text)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey(User.id))
     additional_system_prompt: Mapped[str | None] = mapped_column(Text)
 

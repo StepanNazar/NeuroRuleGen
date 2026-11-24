@@ -1,6 +1,7 @@
 """Background Analysis Worker process: polls pending analyses, fetches PR from GitHub, runs agent, and tracks tokens."""
 
 import asyncio
+import json
 import logging
 import multiprocessing
 import traceback
@@ -91,6 +92,11 @@ class AnalysisWorker:
 
         mcp_client = None
         try:
+            if not repo_url:
+                raise ValueError(
+                    f"GitHub repository URL is missing for project #{project_id}."
+                )
+
             # 1. Fetch PR details and diff
             pr_data = await github_client.get_pull_request(repo_url, pr_number)
             base_sha = pr_data.get("base", {}).get("sha", "")
@@ -123,20 +129,47 @@ class AnalysisWorker:
                     raise ValueError(f"Provider credentials missing for provider #{task.model.provider_id}.")
 
                 all_mcps = await ai_config_repo.get_mcp_servers(project_id)
-                mcp_config = {
-                    s.name: {
-                        "transport": s.transport.value,
-                        "url": s.url,
-                        "headers": s.connection_config_decrypted.get("headers", {}),
+                mcp_config = {}
+                for server in all_mcps:
+                    if not server.enabled:
+                        continue
+                    connection_config = {}
+                    if server.connection_config_encrypted:
+                        try:
+                            connection_config = json.loads(
+                                server.connection_config_encrypted.decode("utf-8")
+                            )
+                        except (UnicodeDecodeError, json.JSONDecodeError) as ex:
+                            raise ValueError(
+                                f"MCP server '{server.name}' has invalid encrypted connection configuration."
+                            ) from ex
+                        if not isinstance(connection_config, dict):
+                            raise ValueError(
+                                f"MCP server '{server.name}' has invalid connection configuration."
+                            )
+                    mcp_config[server.name] = {
+                        "transport": server.transport.value,
+                        "url": server.url,
+                        "headers": connection_config.get("headers", {}),
                     }
-                    for s in all_mcps
-                    if s.enabled
-                }
                 all_skills = await ai_config_repo.get_agent_skills(project_id)
                 skills_files = {s.name: s.content for s in all_skills if s.enabled}
 
-                api_key = cred.api_key_decrypted
-                prov_config = cred.config_decrypted or {}
+                api_key = cred.api_key_encrypted.decode("utf-8")
+                prov_config = {}
+                if cred.config_encrypted:
+                    try:
+                        prov_config = json.loads(
+                            cred.config_encrypted.decode("utf-8")
+                        )
+                    except (UnicodeDecodeError, json.JSONDecodeError) as ex:
+                        raise ValueError(
+                            f"Provider credentials #{cred.id} have invalid encrypted configuration."
+                        ) from ex
+                    if not isinstance(prov_config, dict):
+                        raise ValueError(
+                            f"Provider credentials #{cred.id} have invalid configuration."
+                        )
 
             # Callback for saving findings immediately to database in isolated sessions
             async def on_finding(finding_dict: dict[str, Any]) -> None:

@@ -107,7 +107,8 @@ def project_context(
         project_dict = {
             "id": project.id,
             "name": project.name,
-            "repository": f"https://github.com/repository/{project.github_repository_id}",
+            "repository": project.github_repo_url
+            or f"https://github.com/repository/{project.github_repository_id}",
             "github_repository_id": project.github_repository_id,
             "engineer": is_engineer,
         }
@@ -147,7 +148,8 @@ async def project_home(
         {
             "id": p.id,
             "name": p.name,
-            "repository": f"https://github.com/repository/{p.github_repository_id}",
+            "repository": p.github_repo_url
+            or f"https://github.com/repository/{p.github_repository_id}",
             "engineer": p.created_by_user_id == current_user.id,
         }
         for p in db_projects
