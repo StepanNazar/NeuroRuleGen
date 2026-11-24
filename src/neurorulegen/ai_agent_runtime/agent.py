@@ -92,14 +92,13 @@ async def build_pr_analysis_agent(
         store.put(("files",), clean_path, create_file_data(content))
 
     for skill_name, content in skills_files.items():
-        store.put(("skills",), f"/{skill_name}/SKILL.md", create_file_data(content))
+        store.put(("files",), f"/skills/{skill_name}/SKILL.md", create_file_data(content))
 
     files_backend = StoreBackend(store=store, namespace=lambda _: ("files",))
-    skills_backend = StoreBackend(store=store, namespace=lambda _: ("skills",))
     middleware = [
         SkillsMiddleware(
-            backend=skills_backend,
-            sources=["/"],
+            backend=files_backend,
+            sources=["/skills/"],
         ),
         FilesystemMiddleware(backend=files_backend),
     ]

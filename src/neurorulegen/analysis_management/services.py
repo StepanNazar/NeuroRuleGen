@@ -72,6 +72,15 @@ def _content_blocks(content: Any) -> list[dict[str, Any]]:
     return blocks
 
 
+def _parse_tool_arguments(arguments: Any) -> Any:
+    if not isinstance(arguments, str):
+        return _json_safe(arguments)
+    try:
+        return json.loads(arguments)
+    except json.JSONDecodeError:
+        return arguments
+
+
 def _normalize_tool_calls(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -87,18 +96,22 @@ def _normalize_tool_calls(value: Any) -> list[dict[str, Any]]:
             )
             normalized.append({
                 "name": call.get("name") or call.get("function", {}).get("name") or "unknown",
-                "arguments": _json_safe(arguments),
+                "arguments": _parse_tool_arguments(arguments),
                 "id": call.get("id"),
             })
         else:
             normalized.append({
                 "name": getattr(call, "name", "unknown"),
-                "arguments": _json_safe(
+                "arguments": _parse_tool_arguments(
                     getattr(call, "args", getattr(call, "arguments", {}))
                 ),
                 "id": _json_safe(getattr(call, "id", None)),
             })
     return normalized
+
+
+def _tool_call_key(call: dict[str, Any]) -> tuple[str, str]:
+    return call["name"], _safe_json(call["arguments"])
 
 
 def _extract_message(message: Any) -> dict[str, Any]:
@@ -113,17 +126,31 @@ def _extract_message(message: Any) -> dict[str, Any]:
     invalid_tool_calls = _normalize_tool_calls(
         _message_field(message, "invalid_tool_calls", [])
     )
+    display_blocks: list[dict[str, Any]] = []
     for block in blocks:
         block_type = block.get("type")
-        if block_type in {"tool_call", "server_tool_call"}:
+        if block_type in {"tool_call", "server_tool_call", "function_call"}:
             call = {
-                "name": block.get("name") or "unknown",
-                "arguments": _json_safe(
-                    block.get("args", block.get("arguments", {}))
+                "name": (
+                    block.get("name")
+                    or (block.get("function") or {}).get("name")
+                    or "unknown"
+                ),
+                "arguments": _parse_tool_arguments(
+                    block.get(
+                        "args",
+                        block.get(
+                            "arguments",
+                            (block.get("function") or {}).get("arguments", {}),
+                        ),
+                    )
                 ),
                 "id": _json_safe(block.get("id")),
             }
-            if call not in tool_calls:
+            if not any(
+                _tool_call_key(existing) == _tool_call_key(call)
+                for existing in tool_calls
+            ):
                 tool_calls.append(call)
         elif block_type == "invalid_tool_call":
             invalid_tool_calls.append({
@@ -133,16 +160,22 @@ def _extract_message(message: Any) -> dict[str, Any]:
                 ),
                 "id": _json_safe(block.get("id")),
             })
+        else:
+            display_blocks.append(block)
+    blocks = display_blocks
 
     additional_kwargs = _message_field(message, "additional_kwargs", {}) or {}
     if isinstance(additional_kwargs, dict) and additional_kwargs.get("function_call"):
         function_call = additional_kwargs["function_call"]
         call = {
             "name": function_call.get("name") or "unknown",
-            "arguments": _json_safe(function_call.get("arguments", {})),
+            "arguments": _parse_tool_arguments(function_call.get("arguments", {})),
             "id": _json_safe(additional_kwargs.get("tool_call_id")),
         }
-        if call not in tool_calls:
+        if not any(
+            _tool_call_key(existing) == _tool_call_key(call)
+            for existing in tool_calls
+        ):
             tool_calls.append(call)
 
     usage = _json_safe(_message_field(message, "usage_metadata", {}) or {})
