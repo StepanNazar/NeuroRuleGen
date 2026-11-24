@@ -65,11 +65,12 @@ class AIAnalysis(Base):
             native_enum=False,
             create_constraint=True,
         ),
-        server_default=RunStatus.RUNNING.name,
+        server_default=RunStatus.PENDING.name,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    diff: Mapped[str | None] = mapped_column(Text)
     base_commit_hash: Mapped[str] = mapped_column(Text)
     head_commit_hash: Mapped[str] = mapped_column(Text)
     system_prompt: Mapped[str] = mapped_column(Text)

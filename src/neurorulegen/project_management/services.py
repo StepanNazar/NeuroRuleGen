@@ -85,11 +85,17 @@ class ProjectManagementService:
         ) as e:
             raise ProjectValidationError(str(e)) from e
 
-        github_repository_id = repo_info["id"]
+        github_repository_id = repo_info.get("id")
+        github_repo_url = repo_info.get("html_url")
+        if not isinstance(github_repository_id, int) or not github_repo_url:
+            raise ProjectValidationError(
+                "GitHub returned incomplete repository information."
+            )
 
         project = await self.repository.create_project(
             name=clean_name,
             github_repository_id=github_repository_id,
+            github_repo_url=github_repo_url,
             created_by_user_id=creator_user_id,
             additional_system_prompt=additional_system_prompt,
         )

@@ -8,8 +8,13 @@
           <label class="form-label" for="model">Model</label>
           <select class="form-select" id="model" name="model" required>
             <option value="">Select one model</option>
-            {% for value in ['gpt-5','claude-sonnet'] %}
-              <option {{ 'selected' if model == value }}>{{ value }}</option>
+            {% for available_model in models %}
+              <option
+                value="{{ available_model.name }}"
+                {{ 'selected' if model == available_model.name }}
+              >
+                {{ available_model.name }}
+              </option>
             {% endfor %}
           </select>
         </div>
@@ -17,8 +22,13 @@
           <label class="form-label" for="user">User · optional</label>
           <select class="form-select" name="user" id="user">
             <option value="">All users</option>
-            {% for value in ['user@example.com','developer@example.com'] %}
-              <option {{ 'selected' if user == value }}>{{ value }}</option>
+            {% for project_user in project_users %}
+              <option
+                value="{{ project_user }}"
+                {{ 'selected' if user == project_user }}
+              >
+                {{ project_user }}
+              </option>
             {% endfor %}
           </select>
         </div>

@@ -14,14 +14,14 @@
           value="{{ pr or '' }}"
           required
         />
-        <label class="form-label" for="provider">Provider</label>
-        <select class="form-select mb-3" name="provider" id="provider">
-          <option value="openai">OpenAI</option>
-          <option value="anthropic">Anthropic</option>
-        </select>
         <label class="form-label" for="model">Model</label>
-        <select class="form-select mb-3" name="model" id="model">
-          <option value="gpt-5">gpt-5</option>
+        <select class="form-select mb-3" name="model_id" id="model" required>
+          <option value="">Select one configured model</option>
+          {% for available_model in models %}
+            <option value="{{ available_model.id }}">
+              {{ available_model.provider }} · {{ available_model.name }}
+            </option>
+          {% endfor %}
         </select>
         <label class="form-label" for="instruction">Additional instruction</label
         ><textarea

@@ -25,6 +25,9 @@ dependencies = [
     "cryptography",
     "langchain",
     "langchain-azure-ai",
+    "deepagents>=0.7.41",
+    "langgraph-checkpoint-postgres>=3.2.1",
+    "langchain-mcp-adapters>=0.3.2",
 ]
 
 [build-system]
@@ -33,7 +36,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.21.0",
+    "pytest>=8.3.0",
     "ruff>=0.17.0",
+    "pytest"
 ]
 
 [tool.ruff.lint]

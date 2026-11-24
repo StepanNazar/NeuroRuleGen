@@ -16,6 +16,15 @@ from neurorulegen.authentication_authorization.services import (
     EmailService,
     GitHubOAuthService,
 )
+from neurorulegen.ai_configuration.repository import (
+    SQLAlchemyAIConfigurationRepository,
+)
+from neurorulegen.analysis_management.repository import (
+    SQLAlchemyAIAnalysisRepository,
+    SQLAlchemyAIFindingRepository,
+    SQLAlchemyPullRequestRepository,
+)
+from neurorulegen.analysis_management.services import AnalysisManagementService
 from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import get_db_session
 from neurorulegen.github_integration.services import GitHubClient
@@ -42,17 +51,8 @@ from neurorulegen.web_controllers.authentication_authorization import (
 
 router = APIRouter()
 
-# Preserved runs dictionary for overview until analysis/generation tables are integrated
+# Preserved rule and generation runs until their tables are integrated
 runs = {
-    "ai": [
-        {
-            "id": i,
-            "title": f"PR #{43 - i} · "
-            + ["Validate input", "Refactor service", "Fix cache"][((i - 1) % 3)],
-            "status": ["Completed", "Running", "Failed"][(i - 1) % 3],
-        }
-        for i in range(1, 9)
-    ],
     "rule": [
         {"id": i, "title": f"Analysis #{83 + i}", "status": "Completed"}
         for i in range(1, 7)
@@ -92,6 +92,18 @@ def get_project_service(
     )
 
 
+def get_analysis_service(
+    db: AsyncSession = Depends(get_db_session),  # noqa: B008
+) -> AnalysisManagementService:
+    return AnalysisManagementService(
+        analysis_repo=SQLAlchemyAIAnalysisRepository(db),
+        pr_repo=SQLAlchemyPullRequestRepository(db),
+        finding_repo=SQLAlchemyAIFindingRepository(db),
+        project_repo=SQLAlchemyProjectRepository(db),
+        ai_config_repo=SQLAlchemyAIConfigurationRepository(db),
+    )
+
+
 def project_context(
     project_id: int,
     project: Project | dict[str, Any] | None = None,
@@ -107,7 +119,8 @@ def project_context(
         project_dict = {
             "id": project.id,
             "name": project.name,
-            "repository": f"https://github.com/repository/{project.github_repository_id}",
+            "repository": project.github_repo_url
+            or f"https://github.com/repository/{project.github_repository_id}",
             "github_repository_id": project.github_repository_id,
             "engineer": is_engineer,
         }
@@ -147,7 +160,8 @@ async def project_home(
         {
             "id": p.id,
             "name": p.name,
-            "repository": f"https://github.com/repository/{p.github_repository_id}",
+            "repository": p.github_repo_url
+            or f"https://github.com/repository/{p.github_repository_id}",
             "engineer": p.created_by_user_id == current_user.id,
         }
         for p in db_projects
@@ -211,6 +225,7 @@ async def overview(
     project_id: int,
     current_user: User = Depends(get_current_activated_user),  # noqa: B008
     project_service: ProjectManagementService = Depends(get_project_service),  # noqa: B008
+    analysis_service: AnalysisManagementService = Depends(get_analysis_service),  # noqa: B008
 ):
     try:
         project = await project_service.get_project_details(project_id, current_user.id)
@@ -220,9 +235,44 @@ async def overview(
             f"/projects?notice={err_msg}&notice_type=danger", status_code=303
         )
 
+    ai_count = await analysis_service.count_project_analyses(
+        project_id,
+        current_user.id,
+    )
+    ai_page = pagination_context(request, ai_count, "ai_page", page_size=3)
+    ai_analyses = await analysis_service.list_project_analyses(
+        project_id,
+        current_user.id,
+        offset=(ai_page["page"] - 1) * ai_page["page_size"],
+        limit=ai_page["page_size"],
+    )
+    ai_rows = [
+        {
+            "id": analysis.id,
+            "title": f"PR #{analysis.pull_request.github_pr_number}"
+            if analysis.pull_request
+            else f"Analysis #{analysis.id}",
+            "status": analysis.status.value.capitalize(),
+        }
+        for analysis in ai_analyses
+    ]
+
+    rows_by_kind = {
+        "ai": ai_rows,
+        "rule": runs["rule"],
+        "generation": runs["generation"],
+    }
     lists = []
-    for kind, rows in runs.items():
+    for kind, rows in rows_by_kind.items():
         pager = pagination_context(request, len(rows), f"{kind}_page", page_size=3)
+        if kind == "ai":
+            pager = ai_page
+            page_rows = rows
+        else:
+            page_rows = rows[
+                (pager["page"] - 1) * pager["page_size"] : pager["page"]
+                * pager["page_size"]
+            ]
         lists.append(
             {
                 "kind": kind,
@@ -231,10 +281,7 @@ async def overview(
                     "rule": "Recent rule-based analyses",
                     "generation": "Recent rule generations",
                 }[kind],
-                "rows": rows[
-                    (pager["page"] - 1) * pager["page_size"] : pager["page"]
-                    * pager["page_size"]
-                ],
+                "rows": page_rows,
                 "pager": pager,
             }
         )
@@ -378,5 +425,27 @@ async def leave(
 
 
 @router.get("/api/projects/{project_id}/runs")
-def statuses(project_id: int):
-    return runs
+async def statuses(
+    project_id: int,
+    current_user: User = Depends(get_current_activated_user),  # noqa: B008
+    analysis_service: AnalysisManagementService = Depends(get_analysis_service),  # noqa: B008
+):
+    ai_analyses = await analysis_service.list_project_analyses(
+        project_id,
+        current_user.id,
+        limit=100,
+    )
+    return {
+        "ai": [
+            {
+                "id": analysis.id,
+                "title": f"PR #{analysis.pull_request.github_pr_number}"
+                if analysis.pull_request
+                else f"Analysis #{analysis.id}",
+                "status": analysis.status.value.capitalize(),
+            }
+            for analysis in ai_analyses
+        ],
+        "rule": runs["rule"],
+        "generation": runs["generation"],
+    }
