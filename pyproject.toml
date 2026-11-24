@@ -36,7 +36,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "aiosqlite>=0.21.0",
+    "pytest>=8.3.0",
     "ruff>=0.17.0",
+    "pytest"
 ]
 
 [tool.ruff.lint]
