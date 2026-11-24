@@ -27,6 +27,7 @@ from neurorulegen.analysis_management.models import (
 )
 from neurorulegen.common.enums import RunStatus
 from neurorulegen.rule_management.models import RuleGeneration
+from neurorulegen.authentication_authorization.models import User
 
 
 class PullRequestRepository(ABC):
@@ -390,8 +391,8 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
         stmt_ai = (
             select(
                 func.date(AIAnalysis.created_at).label("d"),
-                AIAnalysis.started_by_user,
-                AIAnalysis.model,
+                User.email.label("user_email"),
+                AIModel.model_identifier.label("model_name"),
                 func.sum(AIAnalysis.input_tokens).label("in_tok"),
                 func.sum(AIAnalysis.cached_input_tokens).label("cache_read"),
                 func.sum(AIAnalysis.cache_write_input_tokens).label("cache_write"),
@@ -399,52 +400,51 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
                 func.sum(AIAnalysis.output_tokens).label("out_tok"),
             )
             .join(PullRequest, AIAnalysis.pull_request_id == PullRequest.id)
-            .options(
-                selectinload(AIAnalysis.started_by_user),
-                selectinload(AIAnalysis.model),
-            )
+            .join(User, AIAnalysis.started_by_user_id == User.id)
+            .join(AIModel, AIAnalysis.model_id == AIModel.id)
             .where(PullRequest.project_id == project_id)
             .group_by(
                 func.date(AIAnalysis.created_at),
                 AIAnalysis.started_by_user_id,
                 AIAnalysis.model_id,
+                User.email,
+                AIModel.model_identifier,
             )
         )
         # 2. rule_generations query
         stmt_rg = (
             select(
                 func.date(RuleGeneration.created_at).label("d"),
-                RuleGeneration.started_by_user,
-                RuleGeneration.model,
+                User.email.label("user_email"),
+                AIModel.model_identifier.label("model_name"),
                 func.sum(RuleGeneration.input_tokens).label("in_tok"),
                 func.sum(RuleGeneration.cached_input_tokens).label("cache_read"),
                 func.sum(RuleGeneration.cache_write_input_tokens).label("cache_write"),
                 func.sum(RuleGeneration.cache_write_input_tokens_long_ttl).label("cache_write_long"),
                 func.sum(RuleGeneration.output_tokens).label("out_tok"),
             )
-            .options(
-                selectinload(RuleGeneration.started_by_user),
-                selectinload(RuleGeneration.model),
-            )
+            .join(User, RuleGeneration.started_by_user_id == User.id)
+            .join(AIModel, RuleGeneration.model_id == AIModel.id)
             .where(RuleGeneration.project_id == project_id)
             .group_by(
                 func.date(RuleGeneration.created_at),
                 RuleGeneration.started_by_user_id,
                 RuleGeneration.model_id,
+                User.email,
+                AIModel.model_identifier,
             )
         )
 
         res_ai = await self.session.execute(stmt_ai)
         for row in res_ai.all():
-            d, user, model, in_tok, c_read, c_write, c_write_l, out_tok = row
-            if model and model.model_identifier == model_name:
-                u_email = user.email if user else ""
+            d, u_email, model_name_row, in_tok, c_read, c_write, c_write_l, out_tok = row
+            if model_name_row == model_name:
                 if not user_email or u_email == user_email:
                     if (not start_date or d >= start_date) and (not end_date or d <= end_date):
                         records.append({
                             "date": d,
                             "user": u_email,
-                            "model": model.model_identifier,
+                            "model": model_name_row,
                             "metrics": [
                                 int(in_tok or 0),
                                 int(c_read or 0),
@@ -456,15 +456,14 @@ class SQLAlchemyAIAnalysisRepository(AIAnalysisRepository):
 
         res_rg = await self.session.execute(stmt_rg)
         for row in res_rg.all():
-            d, user, model, in_tok, c_read, c_write, c_write_l, out_tok = row
-            if model and model.model_identifier == model_name:
-                u_email = user.email if user else ""
+            d, u_email, model_name_row, in_tok, c_read, c_write, c_write_l, out_tok = row
+            if model_name_row == model_name:
                 if not user_email or u_email == user_email:
                     if (not start_date or d >= start_date) and (not end_date or d <= end_date):
                         records.append({
                             "date": d,
                             "user": u_email,
-                            "model": model.model_identifier,
+                            "model": model_name_row,
                             "metrics": [
                                 int(in_tok or 0),
                                 int(c_read or 0),
