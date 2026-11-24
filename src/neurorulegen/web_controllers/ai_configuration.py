@@ -42,8 +42,8 @@ def save_settings(project_id: int):
     return RedirectResponse(f"/projects/{project_id}/ai", status_code=303)
 
 
-@router.get("/projects/{project_id}/skills/new")
 @router.get("/projects/{project_id}/skills/{skill_id}")
+@router.get("/projects/{project_id}/skills/new")
 def skill_form(request: Request, project_id: int, skill_id: int | None = None):
     skill = next((s for s in skills if s["id"] == skill_id), {"name": "", "text": ""})
     return render(
@@ -55,8 +55,8 @@ def skill_form(request: Request, project_id: int, skill_id: int | None = None):
     )
 
 
-@router.post("/projects/{project_id}/skills/new")
 @router.post("/projects/{project_id}/skills/{skill_id}")
+@router.post("/projects/{project_id}/skills/new")
 def save_skill(project_id: int, skill_id: int | None = None):
     return RedirectResponse(f"/projects/{project_id}/ai", status_code=303)
 
