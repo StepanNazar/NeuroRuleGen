@@ -10,6 +10,7 @@
       id="email"
       name="email"
       type="email"
+      value="{{ request.query_params.get('email', '') }}"
       autocomplete="email"
       required
     />{{ password_fields() }}

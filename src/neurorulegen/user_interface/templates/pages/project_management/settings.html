@@ -3,12 +3,6 @@
   <div class="d-grid gap-4">
     <section class="card">
       <div class="card-body">
-        <h2 class="h5">Connected repository · read-only</h2>
-        <p class="text-body-secondary text-break mb-0">{{ project.repository }}</p>
-      </div>
-    </section>
-    <section class="card">
-      <div class="card-body">
         <h2 class="h5">Update project name</h2>
         <form id="rename-project" data-url="/api/projects/{{ project.id }}">
           <label class="form-label" for="name">Project name</label>
@@ -50,14 +44,25 @@
                 <span class="badge text-bg-secondary text-wrap">{{ developer.status }} </span>
               </div>
               <div class="col-12 col-md-4 d-flex justify-content-md-end">
-                <button
-                  class="btn btn-sm btn-danger"
-                  data-confirm-url="/api/projects/{{ project.id }}/developers/{{ developer.id }}"
-                  data-confirm-title="Remove developer?"
-                  data-confirm-message="Remove {{ developer.email }} from this project?"
-                >
-                  Remove
-                </button>
+                {% if developer.is_pending %}
+                  <button
+                    class="btn btn-sm btn-danger"
+                    data-confirm-url="/api/projects/{{ project.id }}/invitations?email={{ developer.email }}"
+                    data-confirm-title="Cancel invitation?"
+                    data-confirm-message="Cancel invitation for {{ developer.email }}?"
+                  >
+                    Cancel invitation
+                  </button>
+                {% else %}
+                  <button
+                    class="btn btn-sm btn-danger"
+                    data-confirm-url="/api/projects/{{ project.id }}/developers/{{ developer.id }}"
+                    data-confirm-title="Remove developer?"
+                    data-confirm-message="Remove {{ developer.email }} from this project?"
+                  >
+                    Remove
+                  </button>
+                {% endif %}
               </div>
             </div>
           {% endfor %}
