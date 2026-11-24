@@ -6,7 +6,7 @@ from typing import Annotated
 from urllib.parse import quote_plus
 
 from cryptography.fernet import Fernet
-from fastapi import APIRouter, Depends, Form, Request, BackgroundTasks, Body
+from fastapi import APIRouter, Depends, Form, Request, BackgroundTasks, Body, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,13 +21,23 @@ from neurorulegen.authentication_authorization.services import (
     AuthService,
     PasswordPolicyError,
     UserAlreadyExistsError,
-    NoPasswordError, HCaptchaService, CaptchaService, MockEmailService, EmailService, BrevoEmailService,
+    NoPasswordError,
+    HCaptchaService,
+    CaptchaService,
+    MockEmailService,
+    EmailService,
+    BrevoEmailService,
     TOTPService,
-    GitHubOAuthService, GitHubRefreshTokenError, RateLimiterService, FailedLoginAttemptLogBasedRateLimiterService,
+    GitHubOAuthService,
+    GitHubRefreshTokenError,
+    RateLimiterService,
+    FailedLoginAttemptLogBasedRateLimiterService,
     TooManyAttemptsError,
 )
 from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import get_db_session
+from neurorulegen.project_management.repository import SQLAlchemyProjectRepository
+from neurorulegen.project_management.services import ProjectManagementService
 from neurorulegen.user_interface.rendering import pagination_context, render
 
 router = APIRouter()
@@ -38,6 +48,7 @@ def get_auth_repository(
 ) -> AuthRepository:
     return SQLAlchemyAuthRepository(db)
 
+
 def get_rate_limiter(
     repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
 ) -> RateLimiterService:
@@ -45,8 +56,9 @@ def get_rate_limiter(
         repository,
         max_attempts_per_ip=get_settings().max_login_attempts_per_ip,
         max_attempts_per_email=get_settings().max_login_attempts_per_email,
-        time_window_minutes=get_settings().max_login_attempts_time_window_minutes
+        time_window_minutes=get_settings().max_login_attempts_time_window_minutes,
     )
+
 
 def get_auth_service(
     repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
@@ -60,11 +72,14 @@ def get_totp_service(
 ) -> TOTPService:
     return TOTPService(repository)
 
+
 def get_captcha_service() -> "CaptchaService":
     return HCaptchaService(secret_key=get_settings().hcaptcha_secret)
 
+
 def get_email_service() -> "EmailService":
     return BrevoEmailService()
+
 
 def get_github_oauth_service(
     repository: AuthRepository = Depends(get_auth_repository),  # noqa: B008
@@ -74,8 +89,9 @@ def get_github_oauth_service(
         client_id=settings.github_client_id,
         client_secret=settings.github_client_secret,
         redirect_uri=settings.github_redirect_uri,
-        auth_repository=repository
+        auth_repository=repository,
     )
+
 
 async def get_current_user(
     request: Request,
@@ -86,6 +102,24 @@ async def get_current_user(
         return None
     user = await repository.get_user_by_id(user_id)
     return user
+
+
+async def get_current_activated_user(
+    request: Request,
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+) -> User:
+    if not current_user:
+        raise HTTPException(
+            status_code=303,
+            headers={"Location": "/login"},
+        )
+    if current_user.activated_at is None:
+        notice = quote_plus("Please activate your account via email to access this page.")
+        raise HTTPException(
+            status_code=303,
+            headers={"Location": f"/profile?notice={notice}&notice_type=warning"},
+        )
+    return current_user
 
 
 @router.get("/login")
@@ -118,26 +152,39 @@ def account_pages(request: Request):
         is_activated=True,
         notification=request.query_params.get("notice", ""),
         notification_type=request.query_params.get("notice_type", "info"),
-        hcaptcha_sitekey=request.app.state.settings.hcaptcha_sitekey
+        hcaptcha_sitekey=request.app.state.settings.hcaptcha_sitekey,
     )
     return response
+
 
 @router.get("/activate")
 async def activate_account(
     request: Request,
     token: str,
     auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+    db: AsyncSession = Depends(get_db_session),  # noqa: B008
 ):
     try:
         user = await auth_service.activate_user(token)
         request.session["user_id"] = user.id
+
+        # Automatically claim pending project invitations for this user
+        proj_repo = SQLAlchemyProjectRepository(db)
+        await proj_repo.commit()  # sync any active state
+        invitations = await proj_repo.get_invitations_by_email(user.email)
+        for inv in invitations:
+            await proj_repo.add_project_developer(inv.project_id, user.id)
+            await proj_repo.remove_developer_invitation(inv.project_id, user.email)
+        if invitations:
+            await proj_repo.commit()
+
         return RedirectResponse(
             "/profile?notice=Account+activated+successfully.&notice_type=success",
             status_code=303,
         )
     except AuthError as e:
         return RedirectResponse(
-            f"/profile?notice={quote_plus("Activation failed.")}&notice_type=danger",
+            f"/profile?notice={quote_plus('Activation failed.')}&notice_type=danger",
             status_code=303,
         )
 
@@ -162,19 +209,19 @@ async def login(
     ):
         return RedirectResponse(
             f"/login?notice={quote_plus('CAPTCHA verification failed.')}&notice_type=danger",
-            status_code=303
+            status_code=303,
         )
 
     error_response = RedirectResponse(
         f"/login?notice={quote_plus('Invalid email or password.')}&notice_type=danger",
-        status_code=303
+        status_code=303,
     )
     try:
         user = await auth_service.login_user(
             email=email,
             password=password,
             ip_address=client_ip or "0.0.0.0",
-            user_agent=request.headers.get("User-Agent")
+            user_agent=request.headers.get("User-Agent"),
         )
         if user is None:
             return error_response
@@ -183,7 +230,7 @@ async def login(
     except TooManyAttemptsError:
         return RedirectResponse(
             f"/login?notice={quote_plus('Too many failed login attempts. Please try again later.')}&notice_type=danger",
-            status_code=303
+            status_code=303,
         )
 
     if user.login_blocked:
@@ -203,7 +250,9 @@ async def login(
         target = (
             "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/profile"
         )
-        return RedirectResponse(f"/totp/verify?next={quote_plus(target)}", status_code=303)
+        return RedirectResponse(
+            f"/totp/verify?next={quote_plus(target)}", status_code=303
+        )
 
     request.session["user_id"] = user.id
     if user.system_role == SystemRole.ADMINISTRATOR:
@@ -222,7 +271,9 @@ async def github_connect(
     request.session["github_oauth_state"] = state
     request.session["github_code_verifier"] = verifier
 
-    auth_url = oauth_service.get_authorization_url(state=state, code_challenge=challenge)
+    auth_url = oauth_service.get_authorization_url(
+        state=state, code_challenge=challenge
+    )
     return RedirectResponse(auth_url, status_code=303)
 
 
@@ -269,7 +320,9 @@ async def github_callback(  # noqa: C901, PLR0912
     access_token = tokens.get("access_token")
     refresh_token = tokens.get("refresh_token")
     if not access_token:
-        error_msg = tokens.get("error_description") or tokens.get("error") or "Unknown error"
+        error_msg = (
+            tokens.get("error_description") or tokens.get("error") or "Unknown error"
+        )
         return RedirectResponse(
             f"/login?notice={quote_plus(f'GitHub error: {error_msg}')}&notice_type=danger",
             status_code=303,
@@ -356,6 +409,15 @@ async def github_callback(  # noqa: C901, PLR0912
             user.github_refresh_token_encrypted = refresh_token_enc
         await repository.commit()
 
+    if user.activated_at:
+        proj_repo = SQLAlchemyProjectRepository(repository._session)
+        invitations = await proj_repo.get_invitations_by_email(user.email)
+        for inv in invitations:
+            await proj_repo.add_project_developer(inv.project_id, user.id)
+            await proj_repo.remove_developer_invitation(inv.project_id, user.email)
+        if invitations:
+            await proj_repo.commit()
+
     if user.login_blocked:
         return render(
             request,
@@ -374,7 +436,9 @@ async def github_callback(  # noqa: C901, PLR0912
         target = (
             "/admin" if user.system_role == SystemRole.ADMINISTRATOR else "/profile"
         )
-        return RedirectResponse(f"/totp/verify?next={quote_plus(target)}", status_code=303)
+        return RedirectResponse(
+            f"/totp/verify?next={quote_plus(target)}", status_code=303
+        )
 
     request.session["user_id"] = user.id
     if user.system_role == SystemRole.ADMINISTRATOR:
@@ -393,7 +457,7 @@ async def register(
     h_captcha_response: Annotated[str, Form(alias="h-captcha-response")],
     auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
     captcha_service: CaptchaService = Depends(get_captcha_service),  # noqa: B008
-    email_service: EmailService = Depends(get_email_service)  # noqa: B008,
+    email_service: EmailService = Depends(get_email_service),  # noqa: B008,
 ):
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
@@ -406,7 +470,7 @@ async def register(
     ):
         return RedirectResponse(
             f"/register?notice={quote_plus('CAPTCHA verification failed.')}&notice_type=danger",
-            status_code=303
+            status_code=303,
         )
     try:
         user = await auth_service.register_user(
@@ -430,11 +494,13 @@ async def register(
             status_code=303,
         )
     request.session["user_id"] = user.id
+
     async def send_activation_email():
         await email_service.send_activation_email(
             user=user,
             activation_link=await auth_service.generate_activation_link(user),
         )
+
     background_tasks.add_task(send_activation_email)
     return RedirectResponse("/profile", status_code=303)
 
@@ -454,30 +520,37 @@ async def reset_password(
         )
     except (AuthError, PasswordPolicyError) as err:
         return RedirectResponse(
-            f"/password-recovery?notice={quote_plus("Failed to reset password.")}&notice_type=danger",
+            f"/password-recovery?notice={quote_plus('Failed to reset password.')}&notice_type=danger",
             status_code=303,
         )
 
+
 class PasswordResetRequest(BaseModel):
     email: str
+
+
 @router.post("/api/password-recovery/code", status_code=202)
 async def send_password_reset_email(
-        background_tasks: BackgroundTasks,
-        request: PasswordResetRequest,
-        email_service: EmailService = Depends(get_email_service),  # noqa: B008
-        auth_service: AuthService = Depends(get_auth_service)  # noqa: B008
-    ):
+    background_tasks: BackgroundTasks,
+    request: PasswordResetRequest,
+    email_service: EmailService = Depends(get_email_service),  # noqa: B008
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+):
     current_user = await auth_service.get_user_by_email(request.email)
     if not current_user:
-        return {"accepted": True}  # Do not reveal whether the email exists for security reasons
+        return {
+            "accepted": True
+        }  # Do not reveal whether the email exists for security reasons
 
     async def send_password_reset_email():
         await email_service.send_password_reset_email(
             user=current_user,
             reset_code=await auth_service.generate_password_reset_code(current_user),
         )
+
     background_tasks.add_task(send_password_reset_email)
     return {"accepted": True}
+
 
 @router.get("/profile")
 async def profile_page(
@@ -552,11 +625,11 @@ async def update_profile(  # noqa: PLR0913
 
 @router.post("/api/profile/activation-email", status_code=202)
 def send_activation_email(
-        background_tasks: BackgroundTasks,
-        current_user: User | None = Depends(get_current_user),  # noqa: B008
-        email_service: EmailService = Depends(get_email_service),  # noqa: B008
-        auth_service: AuthService = Depends(get_auth_service)  # noqa: B008
-    ):
+    background_tasks: BackgroundTasks,
+    current_user: User | None = Depends(get_current_user),  # noqa: B008
+    email_service: EmailService = Depends(get_email_service),  # noqa: B008
+    auth_service: AuthService = Depends(get_auth_service),  # noqa: B008
+):
     if not current_user:
         return {"error": "User not found"}
 
@@ -568,6 +641,7 @@ def send_activation_email(
 
     background_tasks.add_task(send_activation_email)
     return {"accepted": True}
+
 
 @router.get("/totp/setup")
 async def totp_setup_page(
@@ -606,6 +680,7 @@ async def totp_setup_page(
         notification=request.query_params.get("notice", ""),
         notification_type=request.query_params.get("notice_type", "info"),
     )
+
 
 @router.delete("/api/profile/totp")
 async def disable_totp(
@@ -647,7 +722,9 @@ async def verify_totp(
 
     if target == "/admin" and user.system_role == SystemRole.ADMINISTRATOR:
         return RedirectResponse("/admin", status_code=303)
-    return RedirectResponse(target if target.startswith("/") else "/profile", status_code=303)
+    return RedirectResponse(
+        target if target.startswith("/") else "/profile", status_code=303
+    )
 
 
 @router.post("/totp/setup")
@@ -715,7 +792,9 @@ async def admin_page(
     except ValueError:
         blocked_page = 1
     try:
-        blocked_page_size = max(1, min(int(request.query_params.get("blocked_page_size", 5)), 100))
+        blocked_page_size = max(
+            1, min(int(request.query_params.get("blocked_page_size", 5)), 100)
+        )
     except ValueError:
         blocked_page_size = 5
     blocked_offset = (blocked_page - 1) * blocked_page_size
@@ -733,7 +812,9 @@ async def admin_page(
     )
 
     p = pagination_context(request, total_accounts, key="page", page_size=page_size)
-    bp = pagination_context(request, total_blocked, key="blocked_page", page_size=blocked_page_size)
+    bp = pagination_context(
+        request, total_blocked, key="blocked_page", page_size=blocked_page_size
+    )
 
     return render(
         request,
