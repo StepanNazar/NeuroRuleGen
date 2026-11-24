@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from langchain_azure_ai.chat_models import AzureAIOpenAIApiChatModel
+from langchain_core.language_models import BaseChatModel
 
 
 class AIProviderAdapter(ABC):
@@ -15,7 +16,7 @@ class AIProviderAdapter(ABC):
         model_identifier: str,
         api_key: str,
         config: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> BaseChatModel:
         """Instantiate and return a LangChain BaseChatModel."""
         pass
 
@@ -28,7 +29,7 @@ class AzureAIFoundryAdapter(AIProviderAdapter):
         model_identifier: str,
         api_key: str,
         config: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> BaseChatModel:
         cfg = config or {}
         endpoint = cfg.get("endpoint") or cfg.get("base_url")
         project_endpoint = cfg.get("project_endpoint")
@@ -71,7 +72,7 @@ class AIProviderRegistry:
         model_identifier: str,
         api_key: str,
         config: dict[str, Any] | None = None,
-    ) -> Any:
+    ) -> BaseChatModel:
         adapter = cls.get_adapter(provider_name)
         return adapter.create_chat_model(
             model_identifier=model_identifier,

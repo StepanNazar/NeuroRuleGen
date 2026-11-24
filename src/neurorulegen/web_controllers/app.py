@@ -1,3 +1,4 @@
+import multiprocessing
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,6 +9,7 @@ from starlette import status
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
 
+from neurorulegen.ai_agent_runtime.worker import worker_process_main
 from neurorulegen.common.config import get_settings
 from neurorulegen.user_interface.rendering import ROOT
 from neurorulegen.web_controllers import (
@@ -24,7 +26,23 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.settings = settings
-    yield
+    stop_event = multiprocessing.Event()
+    worker_process = multiprocessing.Process(
+        target=worker_process_main,
+        args=(stop_event,),
+        daemon=True,
+    )
+    worker_process.start()
+    app.state.worker_process = worker_process
+    app.state.worker_stop_event = stop_event
+    try:
+        yield
+    finally:
+        stop_event.set()
+        worker_process.join(timeout=30)
+        if worker_process.is_alive():
+            worker_process.terminate()
+
 app = FastAPI(title="NeuroRuleGen", lifespan=lifespan)
 
 app.add_middleware(

@@ -25,6 +25,9 @@ dependencies = [
     "cryptography",
     "langchain",
     "langchain-azure-ai",
+    "deepagents>=0.7.41",
+    "langgraph-checkpoint-postgres>=3.2.1",
+    "langchain-mcp-adapters>=0.3.2",
 ]
 
 [build-system]
