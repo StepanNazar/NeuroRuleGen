@@ -15,7 +15,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from neurorulegen.common.config import get_settings
 from neurorulegen.common.db import Base
+from neurorulegen.common.encrypted_types import EncryptedBytes
 from neurorulegen.project_management.models import Project
 
 
@@ -52,7 +54,8 @@ class ProjectProviderCredential(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     project_id: Mapped[int] = mapped_column(ForeignKey(Project.id))
     provider_id: Mapped[int] = mapped_column(ForeignKey(AIProvider.id))
-    api_key_encrypted: Mapped[bytes] = mapped_column(LargeBinary)
+    api_key_encrypted: Mapped[bytes] = mapped_column(EncryptedBytes(get_settings().fernet_key))
+    config_encrypted: Mapped[bytes | None] = mapped_column(EncryptedBytes(get_settings().fernet_key))
 
     __table_args__ = (UniqueConstraint(project_id, provider_id),)
 
@@ -73,7 +76,7 @@ class MCPServer(Base):
         )
     )
     url: Mapped[str] = mapped_column(Text)
-    connection_config_encrypted: Mapped[bytes] = mapped_column(LargeBinary)
+    connection_config_encrypted: Mapped[bytes] = mapped_column(EncryptedBytes(get_settings().fernet_key))
     enabled: Mapped[bool] = mapped_column(Boolean, server_default=true())
 
     __table_args__ = (

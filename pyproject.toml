@@ -23,6 +23,8 @@ dependencies = [
     "pyotp",
     "segno",
     "cryptography",
+    "langchain",
+    "langchain-azure-ai",
 ]
 
 [build-system]

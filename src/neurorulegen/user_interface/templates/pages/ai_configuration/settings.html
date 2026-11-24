@@ -4,10 +4,10 @@
     <section class="card">
       <div class="card-body">
         <h2 class="h5">Prompt and MCP</h2>
-        <form method="post">
+        <form method="post" action="/projects/{{ project.id }}/ai/prompt-mcp">
           <label class="form-label" for="prompt">Additional system prompt</label
           ><textarea class="form-control mb-3" id="prompt" name="prompt" rows="5">
-{{ configuration.prompt }}</textarea
+{{ configuration.additional_system_prompt }}</textarea
           ><label class="form-label" for="mcp">MCP configuration</label
           ><textarea
             class="form-control font-monospace small mb-3"
@@ -16,34 +16,41 @@
             rows="8"
             spellcheck="false"
           >
-{{ configuration.mcp }}</textarea
+{{ configuration.mcp_json }}</textarea
           ><button class="btn btn-primary">Save configuration</button>
         </form>
       </div>
     </section>
     <section class="card">
       <div class="card-body">
-        <h2 class="h5">Provider keys</h2>
-        <form method="post">
-          <label class="form-label" for="openai-key">OpenAI API key</label>
+        <h2 class="h5">Azure AI Foundry</h2>
+        <p class="text-secondary small mb-3">Configure your Azure AI Foundry endpoint and API key for this project.</p>
+        <form method="post" action="/projects/{{ project.id }}/ai/credentials/azure">
+          <label class="form-label" for="azure-endpoint">Endpoint / Base URL</label>
           <input
             class="form-control mb-3"
-            id="openai-key"
-            name="openai_key"
+            id="azure-endpoint"
+            name="endpoint"
+            type="text"
+            required
+            placeholder="https://<resource>.services.ai.azure.com/openai/v1"
+            value="{{ configuration.azure_endpoint }}"
+          />
+          <label class="form-label" for="azure-key">API Key</label>
+          <input
+            class="form-control mb-3"
+            id="azure-key"
+            name="api_key"
             type="password"
             autocomplete="off"
+            {% if configuration.has_azure_api_key %}
             placeholder="Configured · enter a new key to replace"
+            {% else %}
+            placeholder="Enter API key"
+            required
+            {% endif %}
           />
-          <label class="form-label" for="anthropic-key">Anthropic API key</label>
-          <input
-            class="form-control mb-3"
-            id="anthropic-key"
-            name="anthropic_key"
-            type="password"
-            autocomplete="off"
-            placeholder="Not configured · enter a key"
-          />
-          <button class="btn btn-primary">Save keys</button>
+          <button class="btn btn-primary">Save Azure credentials</button>
         </form>
       </div>
     </section>
